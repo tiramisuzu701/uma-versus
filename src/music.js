@@ -63,7 +63,7 @@ const Music = {
 
 // ---------------------------------------------------------------- director
 const MD = { pRef: null, lastRound: 0, battle: null, jukebox: null };
-const MENU_SCREENS = ['title', 'mode', 'select', 'stage', 'replays', 'controls', 'moves', 'online', 'netselect', 'sound'];
+const MENU_SCREENS = ['title', 'mode', 'select', 'stage', 'replays', 'controls', 'moves', 'online', 'netselect', 'sound', 'account'];
 function decidingRound() { return G.p.length === 2 && G.p[0].wins === 1 && G.p[1].wins === 1; }
 function musicDirector() {
   Music.duck = UI.paused || (G.mode === 'online' && Net.menu) ? 0.4 : 1;

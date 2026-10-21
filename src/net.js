@@ -163,7 +163,9 @@ function bindConn(conn) {
 function onConnected() {
   if (Net.connected) return;
   Net.connected = true; Net.lastRecv = performance.now();
-  Net.myReady = false; Net.theirReady = false; Net.start = null; Net.matchId = 0; Net.theirBuild = '';
+  Net.myReady = false; Net.theirReady = false; Net.start = null; Net.matchId = 0; Net.theirBuild = ''; Net.theirWho = null;
+  Net.sessKey = Date.now().toString(36) + Math.floor(Math.random() * 1e9).toString(36);   // names this pairing's matches in the history
+  netSend({ t: 'who', who: acctWho() });
   netSend({ t: 'lobby', stage: Net.stage, music: Net.side === 0 ? netMusic() : null, build: BUILD, pick: Net.side === 0 ? 0 : 1, ready: false, start: null });
   Net.myPick = Net.side === 0 ? 0 : 1; Net.theirPick = Net.side === 0 ? 1 : 0;
   hideNetPanel(); UI.screen = 'netselect'; Sfx.play('ok');
@@ -198,6 +200,7 @@ function netPump() {
       case 'welcome': if (Net.role === 'guest') onConnected(); break;
       case 'ping': netSend({ t: 'pong', ts: m.ts }); break;
       case 'pong': { const r = now - m.ts; Net.ping = Net.ping ? Net.ping * 0.8 + r * 0.2 : r; break; }
+      case 'who': Net.theirWho = m.who && typeof m.who.name === 'string' ? { id: String(m.who.id || ''), name: m.who.name.slice(0, 16), fav: m.who.fav } : null; break;
       case 'lobby':
         Net.theirPick = m.pick; Net.theirReady = m.ready; Net.theirBuild = m.build || '?'; Net.theirStage = m.stage ?? 0; if (m.music) Net.theirMusic = m.music;
         if (Net.role === 'guest' && m.start && m.start.m > Net.matchId && UI.screen === 'netselect') startNetMatch(m.start);
@@ -209,6 +212,7 @@ function netPump() {
   }
   if (!Net.connected) return;
   if (++Net.pingT % 30 === 0) netSend({ t: 'ping', ts: now });
+  if (Net.lobbyT % 120 === 0) netSend({ t: 'who', who: acctWho() });
   if (++Net.lobbyT % 15 === 0) netSend({ t: 'lobby', stage: Net.stage, music: Net.side === 0 ? netMusic() : null, build: BUILD, pick: Net.myPick, ready: Net.myReady, start: Net.role === 'host' ? Net.start : null });
   if (now - Net.lastRecv > 6000) onDisconnected('Connection timed out.');
 }
@@ -232,7 +236,7 @@ function netSelectTick(e, enter, esc) {
   } else if (e.H) { Net.myReady = false; Sfx.play('menu'); }
   if (Net.role === 'host' && Net.myReady && Net.theirReady) {
     const stage = Net.stage === STAGE_LIST.length ? Math.floor(Math.random() * STAGE_LIST.length) : Net.stage;
-    Net.start = { m: Net.matchId + 1, c: [ROSTER[Net.myPick], ROSTER[Net.theirPick]], delay: Net.delay, stage, music: netMusic() };
+    Net.start = { m: Net.matchId + 1, c: [ROSTER[Net.myPick], ROSTER[Net.theirPick]], delay: Net.delay, stage, music: netMusic(), key: Net.sessKey + '-' + (Net.matchId + 1) };
     netSend({ t: 'lobby', stage: Net.stage, music: Net.side === 0 ? netMusic() : null, build: BUILD, pick: Net.myPick, ready: true, start: Net.start });
     startNetMatch(Net.start);
   }
@@ -242,6 +246,7 @@ function startNetMatch(st) {
     matchId: st.m, delay: st.delay, F: 0, local: [], remote: [], pred: [], snaps: [], rb: null,
     remoteMax: st.delay - 1, ack: st.delay - 1, remoteF: 0, rbFrames: 0, rbMax: 0, stalls: 0,
     csMine: {}, csTheirs: {}, csNext: 0, desync: -1, menu: false, myReady: false, theirReady: false, phaseAt: [], recDone: false,
+    matchKey: typeof st.key === 'string' ? st.key.slice(0, 64) : 'm' + st.m + '-' + Date.now(),
   });
   for (let f = 0; f < st.delay; f++) { Net.local[f] = 0; Net.remote[f] = 0; }
   startMatch('online', st.c[0], st.c[1]);

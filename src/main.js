@@ -18,7 +18,7 @@ function resetControls(save = true) {
   if (save) saveControls();
 }
 function saveControls() { try { localStorage.setItem('umavs.controls', JSON.stringify({ v: 1, keys: KEYMAP, pad: PADMAP })); } catch (e) { } }
-(function loadControls() {
+function loadControls() {
   resetControls(false);
   try {
     const st = JSON.parse(localStorage.getItem('umavs.controls') || 'null');
@@ -27,7 +27,8 @@ function saveControls() { try { localStorage.setItem('umavs.controls', JSON.stri
       if (st.pad && Array.isArray(st.pad[a])) PADMAP[a] = st.pad[a];
     }
   } catch (e) { }
-})();
+}
+loadControls();
 const KEYNAMES = { Space: 'Space', Enter: 'Enter', Backspace: 'Bksp', Tab: 'Tab', ShiftLeft: 'L-Shift', ShiftRight: 'R-Shift', ControlLeft: 'L-Ctrl', ControlRight: 'R-Ctrl',
   AltLeft: 'L-Alt', AltRight: 'R-Alt', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/',
   BracketLeft: '[', BracketRight: ']', Backslash: '\\', Minus: '-', Equal: '=', Backquote: '`' };
@@ -146,7 +147,7 @@ const Sfx = {
 
 // ------------------------------------------------------------------ menus
 const UI = { screen: 'title', modeIdx: 0, sel: [0, 1], selDone: [false, false], pauseIdx: 0, paused: false, movesChar: 0, t: 0, back: 'mode' };
-const MODES = [['VERSUS', 'versus', 'Two players, one keyboard or two gamepads'], ['ONLINE', 'online', 'Play a friend over the internet with a room code (rollback netcode)'], ['VS CPU', 'cpu', 'Fight the computer'], ['TRAINING', 'training', 'Hitboxes, frame advantage, dummy settings'], ['REPLAYS', 'replays', 'Watch your recent matches or load a replay file'], ['COMBO TRIALS', 'trials', 'Learn each runner\'s combos, with demos'], ['MOVE LIST', 'moves', 'Every move for every runner'], ['CONTROLS', 'controls', 'Keyboard and gamepad layout'], ['OPTIONS', 'sound', 'Volume, reduce flashes, fullscreen, and every music track']];
+const MODES = [['VERSUS', 'versus', 'Two players, one keyboard or two gamepads'], ['ONLINE', 'online', 'Play a friend over the internet with a room code (rollback netcode)'], ['VS CPU', 'cpu', 'Fight the computer'], ['TRAINING', 'training', 'Hitboxes, frame advantage, dummy settings'], ['REPLAYS', 'replays', 'Watch your recent matches or load a replay file'], ['COMBO TRIALS', 'trials', 'Learn each runner\'s combos, with demos'], ['MOVE LIST', 'moves', 'Every move for every runner'], ['CONTROLS', 'controls', 'Keyboard and gamepad layout'], ['OPTIONS', 'sound', 'Volume, reduce flashes, fullscreen, and every music track'], ['ACCOUNT', 'account', 'Optional: your name online, cloud save and match history']];
 const ROSTER = ['spe', 'suz', 'gs', 'vo', 'ds', 'mm', 'tt', 'kb'];
 let cpuLevel = 2;
 
@@ -160,6 +161,7 @@ function menuEdges(i, cur) {
 function tick() {
   UI.t++;
   musicDirector();
+  acctTick();
   netPump();
   const pad = [padInput(0), padInput(1)];
   const edges = keyEdges.splice(0);
@@ -191,6 +193,7 @@ function tick() {
       else if (m === 'controls') { UI.screen = 'controls'; UI.back = 'mode'; }
       else if (m === 'sound') { UI.screen = 'sound'; UI.soundIdx = 0; MD.jukebox = 'menu'; }
       else if (m === 'trials') { UI.screen = 'trials'; }
+      else if (m === 'account') { acctOpen(); }
       else { UI.pendingMode = m; UI.screen = 'select'; UI.selDone = [false, false]; UI.sel = lastPicks(m); }
     }
     if (esc || back(0)) { UI.screen = 'title'; Sfx.play('back'); }
@@ -201,6 +204,7 @@ function tick() {
     if (esc) { netClose(false); hideNetPanel(); UI.screen = 'mode'; Sfx.play('back'); }
     return;
   }
+  if (UI.screen === 'account') { acctScreenTick(orEdges(me[0], me[1]), enter, esc); return; }
   if (UI.screen === 'replays') { replaysMenuTick(orEdges(me[0], me[1]), enter, esc, edges); return; }
   if (UI.screen === 'replay') { replayTick(orEdges(me[0], me[1]), edges, esc); return; }
   if (UI.screen === 'netselect') { netSelectTick(orEdges(me[0], me[1]), enter, esc); return; }
@@ -492,6 +496,7 @@ function renderScreen() {
     case 'controls': drawControls(); break;
     case 'game': renderGame(); if (UI.paused) drawPause(); if (G.mode === 'online') drawNetHUD(); break;
     case 'online': drawOnlineBg(); break;
+    case 'account': drawAccount(); break;
     case 'netselect': drawNetSelect(); break;
     case 'replays': drawReplaysMenu(); break;
     case 'replay': renderGame(); drawReplayHUD(); break;
@@ -515,7 +520,7 @@ addEventListener('resize', fit);
 const fontsReady = document.fonts ? Promise.all(['600 16px "Barlow Condensed"', 'italic 800 16px "Barlow Condensed"', 'italic 900 16px "Barlow Condensed"']
   .map(f => document.fonts.load(f).catch(() => null))) : Promise.resolve();
 Music.load();
-fontsReady.then(() => loadAssets()).then(() => { ledCache.clear(); initNetPanel(); fit(); requestAnimationFrame(loop); });
+fontsReady.then(() => loadAssets()).then(() => { ledCache.clear(); initNetPanel(); initAcctPanel(); acctInit(); fit(); requestAnimationFrame(loop); });
 
 // ------------------------------------------------------------------ fullscreen
 function toggleFullscreen() {

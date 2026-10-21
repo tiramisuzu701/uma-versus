@@ -242,7 +242,7 @@ def side():
   <div class="portal"><p class="ph">Navigation</p><ul><li><a href="#home" data-go="home">Main page</a></li><li><a href="#systems" data-go="systems">How to play</a></li></ul></div>
   <div class="portal"><p class="ph">Characters</p><ul>{chars}</ul></div>
   <div class="portal"><p class="ph">Game</p><ul><li><a href="#stages" data-go="stages">Stages</a></li></ul></div>
-  <div class="portal"><p class="ph">Patch notes</p><ul><li><a href="#update17" data-go="update17">Update 1.7</a></li><li><a href="#update16" data-go="update16">Update 1.6</a></li><li><a href="#update15" data-go="update15">Update 1.5</a></li><li><a href="#update1" data-go="update1">Update 1</a></li></ul></div>
+  <div class="portal"><p class="ph">Patch notes</p><ul><li><a href="#update18" data-go="update18">Update 1.8</a></li><li><a href="#update17" data-go="update17">Update 1.7</a></li><li><a href="#update16" data-go="update16">Update 1.6</a></li><li><a href="#update15" data-go="update15">Update 1.5</a></li><li><a href="#update1" data-go="update1">Update 1</a></li></ul></div>
 </nav>"""
 
 roster2 = ''.join(f"""<a class="rcard" href="#{cid}" data-go="{cid}" style="--char:{D['chars'][cid]['color']}">{sprite_box(cid, '800', 'mid')}
@@ -251,7 +251,7 @@ archrows = ''.join(f"""<tr><th scope="row">{E(archname(a))}</th><td>{E(t)}. {E(d
 HOME2 = f"""
 <section class="view" id="v-home" data-view="home">
   <h1 class="ptitle">Uma Versus Wiki</h1>
-  <p class="tagline">Update 1.7 · build {BUILD}</p>
+  <p class="tagline">Update 1.8 · build {BUILD}</p>
   <img class="homelogo" src="{LOGO}" alt="Uma Versus logo">
   <div class="welcome"><p>Welcome to the <b>Uma Versus</b> wiki, the reference for the fan-made Umamusume browser fighting game: characters, moves, frame data and combos. All frame data and combos are measured from the game itself, so they match build <span class="mono">{BUILD}</span>.</p></div>
   <h2>Characters</h2>
@@ -259,7 +259,7 @@ HOME2 = f"""
   <h2>Archetypes</h2>
   <div class="tw"><table class="atab"><thead><tr><th>Archetype</th><th>Plays like</th><th>Characters</th></tr></thead><tbody>{archrows}</tbody></table></div>
   <h2>Getting started</h2>
-  <ul><li><a href="#systems" data-go="systems">How to play</a>: controls, notation, defense, skills and combos.</li><li><a href="#stages" data-go="stages">Stages</a>: the four courses.</li><li><a href="#update17" data-go="update17">Update 1.7 patch notes</a>: a new logo, Daiwa's new super and bug fixes.</li><li><a href="#update16" data-go="update16">Update 1.6 patch notes</a>: new look, three new stages and music.</li></ul>
+  <ul><li><a href="#systems" data-go="systems">How to play</a>: controls, notation, defense, skills and combos.</li><li><a href="#stages" data-go="stages">Stages</a>: the four courses.</li><li><a href="#update18" data-go="update18">Update 1.8 patch notes</a>: accounts.</li><li><a href="#update17" data-go="update17">Update 1.7 patch notes</a>: a new logo, Daiwa's new super and bug fixes.</li><li><a href="#update16" data-go="update16">Update 1.6 patch notes</a>: new look, three new stages and music.</li></ul>
 </section>"""
 
 CSS = """
@@ -408,6 +408,25 @@ STAGESV = f"""
   <p>Pick a course after both runners are entered, or leave it to the draw with <b>Random</b>. Stages are cosmetic: every course has the same size and floor, so matchups play the same everywhere. Online, the host picks the course from the entry screen (↑ / ↓).</p>
   <div class="stgs">{stage_cards}</div>
 </section>"""
+UPDATE18 = f"""
+<section class="view" id="v-update18" data-view="update18" hidden>
+  <h1 class="ptitle">Update 1.8</h1>
+  <p class="tagline">Patch notes · build {BUILD}</p>
+  <div class="prose">
+  <h2>Accounts</h2>
+  <ul><li>New <b>Account</b> entry on the main menu. Accounts are optional: guests can still play everything.</li>
+  <li>Sign up with an email, a password, a display name and a favourite runner. Names are unique, 3–16 characters long.</li>
+  <li><b>Your name online</b>: opponents see your display name in the lobby and during the match.</li>
+  <li><b>Cloud save</b>: controls, volume, Options and combo-trial progress follow you to any browser. The first time you sign in, the settings in that browser become your account's.</li>
+  <li><b>Match history</b>: online and VS CPU matches are saved while you're signed in. The Account screen shows your matches, wins, win rate, online record, most-played runner and your last few results.</li>
+  <li>The title screen shows who is signed in.</li></ul>
+  <h2>Privacy</h2>
+  <ul><li>Your email and password are only used to sign in and are never shown to anyone. Your display name, favourite runner and match results are public, so other players can see them. Settings are private to your account.</li>
+  <li>Each player can only add results to their own history.</li></ul>
+  <h2>Online</h2>
+  <ul><li>Both players need build <b class="mono">{BUILD}</b>.</li></ul>
+  </div>
+</section>"""
 UPDATE17 = f"""
 <section class="view" id="v-update17" data-view="update17" hidden>
   <h1 class="ptitle">Update 1.7</h1>
@@ -496,6 +515,7 @@ page = f"""<title>Uma Versus Wiki</title>
 {SYSTEMS}
 {''.join(char_page(cid, i) for i, cid in enumerate(ORDER, 1))}
 {STAGESV}
+{UPDATE18}
 {UPDATE17}
 {UPDATE16}
 {UPDATE15}

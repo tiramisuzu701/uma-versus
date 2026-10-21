@@ -31,6 +31,28 @@
   #netStatus{min-height:20px;font-size:15px;color:#f6c343;margin-top:8px}
   #net .padfocus{outline:3px solid #f6c343;outline-offset:3px}
   #net hr{border:0;border-top:2px solid #f4f1e8;opacity:.2;margin:12px 0}
+  #acct{position:fixed;left:50%;top:50%;transform:translate(-50%,-47%);width:min(440px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;
+       background:rgba(12,17,38,.97);border-top:4px solid #ff4f8b;border-radius:6px;padding:14px 22px;color:#e6e9f8;box-shadow:0 14px 44px rgba(0,0,0,.55);font-size:16px}
+  #acct h2{margin:0 0 2px;font:italic 900 32px 'Barlow Condensed',sans-serif;color:#fff}
+  #acct h2::after{content:'';display:block;width:120px;height:4px;margin-top:4px;background:linear-gradient(90deg,#ff4f8b,#f6c343,#2fae5b,#4aa8ff)}
+  #acct p.sub{margin:8px 0 10px;color:#aeb5d8;font-size:15px;line-height:1.35}
+  #acct ul{margin:0 0 10px;padding-left:18px;color:#c9cfe8;font-size:15px;line-height:1.4}
+  #acct .tabs{display:flex;gap:6px;margin:10px 0 6px}
+  #acct .tabs button{flex:1}
+  #acct .tabs button.on{background:#f6c343;color:#141a3a}
+  #acct label.f{display:block;font-size:14px;color:#c9cfe8;margin:6px 0 2px}
+  #acct .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  #acct input,#acct select{width:100%;box-sizing:border-box;font:600 17px 'Barlow Condensed',sans-serif;padding:6px 10px;border-radius:4px;border:2px solid #283466;background:#070a18;color:#fff}
+  #acct input:focus,#acct select:focus{border-color:#f6c343;outline:none}
+  #acct .row{display:flex;gap:8px;margin:10px 0 0;align-items:center;flex-wrap:wrap}
+  #acct button{font:italic 800 18px 'Barlow Condensed',sans-serif;padding:9px 18px;border:0;background:#ff4f8b;color:#fff;cursor:pointer;
+       clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+  #acct button.ghost{background:#283466;color:#dfe2f5}
+  #acct button.link{background:none;color:#9fc3ff;padding:4px 0;clip-path:none;font:600 15px 'Barlow Condensed',sans-serif;text-decoration:underline}
+  #acct button:hover{filter:brightness(1.12)}
+  #acct button:disabled{opacity:.5;cursor:default}
+  #acStatus{min-height:18px;font-size:15px;color:#f6c343;margin-top:6px}
+  #acct .hint{font-size:13px;color:#8f97bf;margin-top:3px}
 </style>
 </head>
 <body>
@@ -47,8 +69,32 @@
   <div id="netStatus"></div>
   <div class="row" style="justify-content:flex-end;margin-bottom:0"><button class="ghost" id="netBack">Back</button></div>
 </div>
+<div id="acct" class="hidden">
+  <h2 id="acTitle">ACCOUNT</h2>
+  <div id="acOff" class="hidden"><p class="sub">Accounts aren't switched on in this copy of the game. Everything else works as normal.</p></div>
+  <div id="acForm">
+    <p class="sub">Optional: guests can play everything. An account shows your name online, saves your controls, volume and trials, and keeps a match history.</p>
+    <div class="tabs"><button id="acTabIn" class="on">Sign in</button><button id="acTabUp" class="ghost">Create account</button></div>
+    <label class="f" for="acEmail">Email</label><input id="acEmail" type="email" autocomplete="email" maxlength="120">
+    <label class="f" for="acPass">Password</label><input id="acPass" type="password" autocomplete="current-password" maxlength="72">
+    <div id="acUpOnly" class="hidden">
+      <div class="two"><div><label class="f" for="acName">Display name</label><input id="acName" type="text" maxlength="16" autocomplete="nickname" placeholder="3–16 characters"></div>
+      <div><label class="f" for="acFav">Favourite runner</label><select id="acFav"></select></div></div>
+    </div>
+    <div class="row"><button id="acGo">Sign in</button><button class="link" id="acForgot">Forgot password?</button></div>
+  </div>
+  <div id="acRename" class="hidden">
+    <p class="sub">Pick a new display name. Opponents see it online.</p>
+    <label class="f" for="acNewName">Display name</label><input id="acNewName" type="text" maxlength="16">
+    <div class="hint">3–16 characters: letters, numbers, spaces, _ . -</div>
+    <div class="row"><button id="acSaveName">Save name</button></div>
+  </div>
+  <div id="acStatus"></div>
+  <div class="row" style="justify-content:flex-end;margin-top:4px"><button class="ghost" id="acBack">Back</button></div>
+</div>
 <input type="file" id="repFile" accept=".umarep,.json,application/json" class="hidden">
 <script>/*__PEERJS__*/</script>
+<script>/*__SUPABASE__*/</script>
 <script>/*__MUSIC__*/</script>
 <script>/*__LOGO__*/</script>
 <script>

@@ -1,4 +1,4 @@
-const VERSION = '1.7';   // shown on the title screen and main menu (cosmetic; not part of BUILD)
+const VERSION = '1.8';   // shown on the title screen and main menu (cosmetic; not part of BUILD)
 // ============================================================================
 //  UI  —  "race day" look: starting-gate colours, tote-board LED text,
 //  saddlecloth name plates, rosettes for round wins. Menus + in-game HUD.
@@ -216,10 +216,11 @@ function drawTitle() {
   label('Enter · F · Ⓐ', W / 2, 368, 15, '#dfe3f5', 'center');
   if (Music.blocked) { slant(W / 2 - 205, 400, 410, 30, 10, 'rgba(8,11,28,.85)'); label('♪  Your browser holds back sound until you press a key or click', W / 2 + 5, 416, 14, PAL.gold, 'center', 700); }
   label(`Update ${VERSION} · build ${BUILD}`, W - 12, HGT - 12, 12, 'rgba(255,255,255,.55)', 'right');
+  drawAcctChip();
 }
 
 // ---------------------------------------------------------------- main menu ("race programme")
-const MODE_META = { versus: '2P · SAME SCREEN', online: 'ROLLBACK', cpu: '', training: 'FREE RUN', replays: '', trials: '', moves: '8 RUNNERS', controls: 'KEYS · PADS', sound: 'VOLUME · TRACKS' };
+const MODE_META = { account: '', versus: '2P · SAME SCREEN', online: 'ROLLBACK', cpu: '', training: 'FREE RUN', replays: '', trials: '', moves: '8 RUNNERS', controls: 'KEYS · PADS', sound: 'VOLUME · TRACKS' };
 const TIPS = ['Hold back to block, even straight out of a dash', 'motion + H is the EX version of a skill: it costs 50 Spurt',
   'Mash L for an auto-combo: 5L › 5M › 5H › skill', 'Teio\'s skills chain into each other on hit', 'McQueen deals PUNISH! damage to anyone caught recovering',
   'Vodka\'s Full Throttle is a hard knockdown: no quick rise', 'Daiwa can keep two shots on screen', 'Kitasan\'s Matsuri Uppercut is fully invincible',
@@ -245,19 +246,20 @@ function drawMode() {
   gateTag(gateOf(cid), 852, 450, 26);
   label('IN THE PADDOCK · ' + c.arch, 640, 494, 14, '#e6e9f8', 'left', 700, true);
   // entries
-  const x = 46, y0 = 58, rowH = 47;
+  const x = 46, y0 = 52, rowH = 43;
   MODES.forEach(([lab, id, desc], i) => {
     const y = y0 + i * rowH, s = i === UI.modeIdx, push = s ? 14 : 0;
     slant(x + push, y, 470, rowH - 6, 14, s ? 'rgba(255,255,255,.96)' : 'rgba(12,17,38,.82)');
     if (s) slant(x + push - 6, y, 8, rowH - 6, 14, PAL.rose);
     gateTag(i, x + push + 14, y + 8, 25);
-    label(lab, x + push + 52, y + 15, 24, s ? PAL.ink : '#fff', 'left', 900, true);
+    label(lab, x + push + 52, y + 14, 23, s ? PAL.ink : '#fff', 'left', 900, true);
     let meta = MODE_META[id] || '';
     if (id === 'cpu') meta = `◀ ${CPU_NAMES[cpuLevel]} ▶`;
     if (id === 'replays') meta = `${loadStored().length} SAVED`;
+    if (id === 'account') meta = acctName() ? acctName().toUpperCase() : ACCT.on ? 'GUEST' : 'OFF';
     if (id === 'trials') { const t = ROSTER.reduce((s, c) => s + (trialDone[c] || []).length, 0), n = ROSTER.reduce((s, c) => s + trialsFor(c).length, 0); meta = `${t} / ${n} CLEARED`; }
-    label(meta, x + push + 452, y + 15, 14, s ? '#5a6080' : PAL.dim, 'right', 700, true);
-    label(desc, x + push + 52, y + 32, 12.5, s ? '#40466a' : '#aeb5d8', 'left', 600);
+    label(meta, x + push + 452, y + 14, 14, s ? '#5a6080' : PAL.dim, 'right', 700, true);
+    label(desc, x + push + 52, y + 29, 12.5, s ? '#40466a' : '#aeb5d8', 'left', 600);
   });
   ticker(HGT - 54);
   hintBar('↑ ↓ choose    ·    F / Enter confirm    ·    H / Esc back');
@@ -727,7 +729,7 @@ function drawNetSelect() {
   drawStalls([{ i: picks[0], col: PAL.p1, tag: Net.side === 0 ? 'YOU' : 'P1' }, { i: picks[1], col: PAL.p2, tag: Net.side === 1 ? 'YOU' : 'P2' }]);
   for (let side = 0; side < 2; side++) {
     const mine = side === Net.side;
-    drawEntryCard(side, ROSTER[picks[side]] || null, ready[side], (side === 0 ? 'P1' : 'P2') + (mine ? ' · YOU' : ''), side === 1 && picks[0] === picks[1], mine ? '' : (ready[side] ? '' : 'choosing…'));
+    drawEntryCard(side, ROSTER[picks[side]] || null, ready[side], (netName(side) || (side === 0 ? 'P1' : 'P2')) + (mine ? ' · YOU' : ''), side === 1 && picks[0] === picks[1], mine ? '' : (ready[side] ? '' : 'choosing…'));
   }
   // course + music (P1, the host, decides)
   const host = Net.role === 'host', st = host ? Net.stage : Net.theirStage, mu = host ? netMusic() : (Net.theirMusic || ROSTER[picks[0]]);
@@ -750,6 +752,7 @@ function drawNetSelect() {
 function drawNetHUD() {
   const r = Net.rbFrames ? ` · rollback ${Net.rbFrames}f` : '';
   label(`ONLINE · ${Math.round(Net.ping)} ms · delay ${Net.delay}${r}`, W / 2, 84, 12, '#cfe3ff', 'center', 700);
+  for (const sd of [0, 1]) { const n = netName(sd); if (n) label(n, sd === 0 ? 112 : W - 112, 84, 14, '#fff', sd === 0 ? 'left' : 'right', 900, true); }
   if (Net.waiting && Net.stalls > 20) txt('waiting for opponent…', W / 2, 104, 18, PAL.gold);
   if (Net.desync >= 0) txt(`DESYNC at frame ${Net.desync}: please report what happened`, W / 2, 124, 15, '#ff6b6b');
   if (Net.menu) {
@@ -825,3 +828,54 @@ function drawSound() {
   if (Music.blocked) label('Press any key to allow audio', 624, 250, 14, PAL.gold, 'left', 700);
   hintBar('↑ ↓ choose    ·    ← → change volume    ·    F / Enter play a track    ·    Esc back');
 }
+
+// ---------------------------------------------------------------- account (Update 1.8)
+function drawAccount() {
+  menuBg(0.72);
+  topBar('ACCOUNT', acctOn() ? 'signed in · settings saved to your account' : ACCT.on ? 'playing as a guest' : 'accounts are off in this copy');
+  if (!acctOn()) { hintBar('Tab / click to move between boxes    ·    Enter to confirm    ·    Esc back'); return; }
+  const p = ACCT.profile, st = ACCT.stats || {}, fav = (p && p.fav_runner) || 'spe', c = CHARS[fav];
+  // ---- profile card
+  panel(30, 60, 400, 412, c.color);
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(230, 300, 96, 14, 0, 0, 7); ctx.fill();
+  drawSpr(fav, 'img', '800', Math.floor(UI.t / 9) % SPR[fav].anims['800'][1], 230, 304, 1, 3.4);
+  plate(50, 78, 360, 44, c.color, 14); label(p ? p.name : '…', 70, 101, 30, '#fff', 'left', 900, true);
+  label(p ? 'joined ' + new Date(p.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '', 404, 140, 13, PAL.dim, 'right', 700);
+  // stats
+  const games = st.games || 0, wins = st.wins || 0, og = st.online_games || 0, ow = st.online_wins || 0;
+  const boxes = [['MATCHES', String(games)], ['WINS', String(wins)], ['WIN RATE', games ? Math.round(100 * wins / games) + '%' : '—'], ['ONLINE', og ? `${ow}-${og - ow}` : '—']];
+  boxes.forEach(([k, v], i) => { const x = 46 + i * 92; rrect(x, 322, 84, 58, 5, 'rgba(255,255,255,.06)'); label(k, x + 42, 336, 12, PAL.dim, 'center', 800, true); txt(v, x + 42, 362, 26, '#fff'); });
+  if (st.main_runner) { label('MOST PLAYED', 50, 404, 12, PAL.dim, 'left', 800, true); face(st.main_runner, 0, 50, 414, 44); label(nameOf(st.main_runner), 102, 437, 18, '#fff', 'left', 900, true); }
+  // ---- rows
+  const rows = { fav: `Favourite runner   ◀ ${nameOf(fav)} ▶`, name: 'Change name', sync: 'Save settings now', out: 'Sign out', back: 'Back' };
+  ACCT_ROWS.forEach((r, i) => {
+    const y = 300 + i * 34, s = i === ACCT.idx, x = 458 + (s ? 10 : 0);
+    slant(x, y, 470, 30, 10, s ? 'rgba(255,255,255,.96)' : 'rgba(12,17,38,.82)');
+    if (s) slant(x - 6, y, 8, 30, 10, PAL.rose);
+    label(rows[r], x + 20, y + 15, 18, s ? PAL.ink : '#fff', 'left', 900, true);
+  });
+  // ---- recent matches
+  panel(458, 60, 472, 226, PAL.turf);
+  label('RECENT MATCHES', 474, 80, 15, PAL.gold, 'left', 900, true);
+  if (!ACCT.recent.length) label('Play online or VS CPU while signed in and your results show up here.', 474, 110, 14, '#cfd3ea', 'left', 600);
+  ACCT.recent.slice(0, 7).forEach((m, i) => {
+    const y = 96 + i * 27;
+    rrect(474, y, 34, 22, 4, m.won ? PAL.turf : '#8a2a3c'); label(m.won ? 'WIN' : 'LOSS', 491, y + 11, 11, '#fff', 'center', 900, true);
+    face(m.my_runner, 0, 514, y - 1, 24); label('vs', 543, y + 11, 12, PAL.dim, 'left', 700); face(m.opp_runner, 0, 560, y - 1, 24, true);
+    label(m.opp_name || '', 592, y + 11, 15, '#fff', 'left', 800, true);
+    label(`${m.rounds_won}-${m.rounds_lost}`, 818, y + 11, 15, m.won ? '#9dffb4' : '#ffb0bc', 'right', 900, true);
+    label(new Date(m.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), 912, y + 11, 12, PAL.dim, 'right', 700);
+  });
+  if (ACCT.status) label(ACCT.status, 458 + 235, 486, 14, ACCT.statusOk ? PAL.gold : '#ff8a9a', 'center', 700);
+  hintBar('↑ ↓ choose    ·    ← → change runner    ·    F / Enter confirm    ·    H / Esc back');
+}
+// small "who's signed in" chip for the title screen
+function drawAcctChip() {
+  if (!ACCT.on) return;
+  const n = acctName();
+  slant(-10, 10, 230, 28, 10, 'rgba(8,11,28,.78)');
+  if (n) { face(ACCT.profile.fav_runner, 0, 10, 12, 24); label(n, 40, 25, 16, '#fff', 'left', 900, true); }
+  else label('GUEST  ·  sign in from ACCOUNT', 14, 25, 13, PAL.dim, 'left', 800, true);
+}
+// online: show account names instead of P1/P2 when we have them
+function netName(side) { if (G.mode !== 'online' && UI.screen !== 'netselect') return null; return side === Net.side ? acctName() : (Net.theirWho && Net.theirWho.name) || null; }

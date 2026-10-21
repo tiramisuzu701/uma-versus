@@ -4,7 +4,7 @@ for _d in ('build/wiki', 'build/shots/ui', 'build/shots/fx'): _os.makedirs(_os.p
 import json,re,hashlib
 root=ROOT+'/'
 assets={k:json.load(open(root+f'assets/sprites/{k}.json')) for k in ['spe','suz','gs','vo','ds','mm','tt','kb']}
-files=['data.js','engine.js','render.js','stages.js','net.js','replay.js','ui.js','music.js','trials.js','ai.js','main.js']
+files=['data.js','engine.js','render.js','stages.js','net.js','replay.js','ui.js','music.js','trials.js','ai.js','config.js','account.js','main.js']
 src={f:open(root+'src/'+f).read() for f in files}
 # BUILD = fingerprint of everything that affects the simulation (characters, engine, netcode)
 build=hashlib.sha1((src['data.js']+src['engine.js']+src['net.js']).encode()).hexdigest()[:6]
@@ -31,6 +31,13 @@ import os
 mdir=ROOT+'/assets/music/'
 music={k[:-4]: base64.b64encode(open(mdir+k,'rb').read()).decode() for k in sorted(os.listdir(mdir)) if k.endswith('.mp3')}
 html=html.replace('/*__MUSIC__*/','const MUSIC_DATA = '+json.dumps(music)+';')
+sb=open(ROOT+'/vendor/supabase.js').read()
+sb=re.sub(r'//# sourceMappingURL=.*','',sb)
+# the bundle is inlined, so webpack can't find its own script URL; it only needs one for a Node-only chunk, so give it a dummy
+_pp='if(!e)throw new Error("Automatic publicPath is not supported in this browser");'
+assert sb.count(_pp)==1; sb=sb.replace(_pp,'if(!e)e="https://invalid.local/";')
+assert '</script' not in sb.lower()
+html=html.replace('/*__SUPABASE__*/',sb)
 html=html.replace('/*__PEERJS__*/',peer).replace('/*__ASSETS__*/','const ASSETS = '+json.dumps(assets)+';').replace('/*__CODE__*/',code)
 open(root+'index.html','w').write(html)
 print(len(html), 'build', build)
