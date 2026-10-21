@@ -23,7 +23,7 @@ Default controls (you can change them all under *Controls*):
 | Skill | T | I | A |
 | Throw (L+M) / Super (S+H) | R / Y | U / O | LB / RB |
 
-The wiki has the full guide, frame data for every move and all the combos: https://uma-versus-wiki.wuaze.com
+The wiki has the full guide, frame data for every move and all the combos: https://tiramisuzu701.github.io/uma-versus/wiki/
 
 ## Credits
 
