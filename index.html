@@ -2375,12 +2375,15 @@ function buildNakayama() {
   prect(n, '#5a4a40', 0, 170, PW, 10); prect(n, '#f4f4f4', 0, 166, PW, 2);
   for (let x = 0; x < PW; x += 3) prect(n, '#e8eef8', x, 169 + Math.floor(r() * 2), 3, 2);
 
-  const lamp = (c, x, y, rad, a) => { const g = c.createRadialGradient(x, y, 2, x, y, rad); g.addColorStop(0, `rgba(255,248,210,${a})`); g.addColorStop(1, 'rgba(255,248,210,0)'); c.fillStyle = g; c.fillRect(x - rad, y - rad, rad * 2, rad * 2); };
+  const lampC = canvasOf(160, 160); { const l = lampC.getContext('2d'), g = l.createRadialGradient(80, 80, 2, 80, 80, 80); g.addColorStop(0, 'rgba(255,248,210,0.55)'); g.addColorStop(1, 'rgba(255,248,210,0)'); l.fillStyle = g; l.fillRect(0, 0, 160, 160); }
+  const lamp = (c, x, y) => c.drawImage(lampC, x - 80, y - 80);
   const back = (c, left, t) => {
     // star twinkle
-    for (let i = 0; i < stars.length; i += 3) { const [x, y] = stars[i]; if (y > 38) continue; const a = 0.5 + 0.5 * Math.sin(t / 14 + i); c.fillStyle = `rgba(255,255,255,${a})`; c.fillRect(x * PX - left * 0.35, y * PX, 3, 3); }
+    c.fillStyle = '#fff';
+    for (let i = 0; i < stars.length; i += 3) { const [x, y] = stars[i]; if (y > 38) continue; c.globalAlpha = 0.5 + 0.5 * Math.sin(t / 14 + i); c.fillRect(x * PX - left * 0.35, y * PX, 3, 3); }
+    c.globalAlpha = 1;
     c.save(); c.globalCompositeOperation = 'lighter';
-    for (const tx of towers) lamp(c, tx * PX - left * 0.65, 24, 80, 0.55);
+    for (const tx of towers) lamp(c, tx * PX - left * 0.65, 24);
     garland.forEach(([x, y], i) => {
       const on = ((i + Math.floor(t / 12)) % 4) !== 0;
       if (!on) return;
@@ -2390,12 +2393,14 @@ function buildNakayama() {
     c.restore(); c.globalAlpha = 1;
   };
   const front = (c, left, t) => {   // snowfall in front of everything
+    c.fillStyle = 'rgb(245,248,255)';
     for (let i = 0; i < 70; i++) {
       const sp = 0.6 + (i % 5) * 0.25, sz = i % 7 === 0 ? 4 : i % 3 === 0 ? 3 : 2;
       const x = ((i * 137 + Math.sin(t / 50 + i) * 20 + t * 0.3 - left * (0.3 + sp * 0.3)) % W + W) % W;
       const y = (i * 61 + t * sp) % (HGT + 20) - 10;
-      c.fillStyle = `rgba(245,248,255,${0.55 + (i % 3) * 0.15})`; c.fillRect(x, y, sz, sz);
+      c.globalAlpha = 0.55 + (i % 3) * 0.15; c.fillRect(x, y, sz, sz);
     }
+    c.globalAlpha = 1;
   };
   return { far, mid, near, back, front };
 }
@@ -2467,15 +2472,20 @@ function buildLive() {
   };
   const front = (c, left, t) => {   // footlights, then the crowd in front of the stage with penlights
     foot.forEach((x, i) => { c.fillStyle = (Math.floor(t / 10) + i) % 3 ? '#ffd27a' : '#ff9ad0'; c.fillRect(x * PX - left, 169 * PX, 18, 4); });
-    for (let i = 0; i < 46; i++) {
-      const bx = ((i * 41 - left * 1.15) % (W + 80) + W + 80) % (W + 80) - 40, by = HGT - 14 + (i % 3) * 5;
-      const sway = Math.sin(t / 12 + (i % 6)) * 0.6, col = COLS[(i * 7) % COLS.length];
-      c.save(); c.translate(bx + 10, by); c.rotate(sway);
-      c.globalCompositeOperation = 'lighter'; c.fillStyle = col + '44'; c.fillRect(-4, -30, 8, 20); c.globalCompositeOperation = 'source-over';
+    const crowd = [];
+    for (let i = 0; i < 46; i++) crowd.push([((i * 41 - left * 1.15) % (W + 80) + W + 80) % (W + 80) - 40, HGT - 14 + (i % 3) * 5, Math.sin(t / 12 + (i % 6)) * 0.6, COLS[(i * 7) % COLS.length]]);
+    const stick = (bx, by, sway) => { c.translate(bx + 10, by); c.rotate(sway); };
+    c.save(); c.globalCompositeOperation = 'lighter';   // penlight glows
+    for (const [bx, by, sway, col] of crowd) { c.save(); stick(bx, by, sway); c.fillStyle = col + '44'; c.fillRect(-4, -30, 8, 20); c.restore(); }
+    c.restore();
+    for (const [bx, by, sway, col] of crowd) {   // penlights
+      c.save(); stick(bx, by, sway);
       c.fillStyle = col; c.globalAlpha = 0.75; c.fillRect(-1.5, -28, 3, 18); c.globalAlpha = 1; c.fillStyle = '#c8c8d4'; c.fillRect(-1.5, -10, 3, 6);
       c.restore();
-      c.fillStyle = '#07040d'; c.beginPath(); c.arc(bx + 6, by + 8, 13, 0, 7); c.fill(); c.fillRect(bx - 10, by + 14, 34, 20);
     }
+    c.fillStyle = '#07040d'; c.beginPath();   // heads and shoulders, one path
+    for (const [bx, by] of crowd) { c.moveTo(bx + 19, by + 8); c.arc(bx + 6, by + 8, 13, 0, 7); c.rect(bx - 10, by + 14, 34, 20); }
+    c.fill();
   };
   return { far, mid, near, back, front };
 }
@@ -3058,7 +3068,7 @@ function replaysMenuTick(e, enter, esc, edges) {
   if (esc || e.H) { UI.screen = 'mode'; Sfx.play('back'); }
 }
 
-const VERSION = '1.8.1';
+const VERSION = '1.8.2';
 // Menus and HUD. The look is race day: gate colours, tote-board LED text,
 // saddlecloth name plates, rosettes for round wins.
 'use strict';
@@ -3960,9 +3970,22 @@ const Music = {
   url(id) {
     if (this.urls[id]) return this.urls[id];
     if (typeof MUSIC_DATA === 'undefined' || !MUSIC_DATA[id]) return null;
+    // not prewarmed yet: decode now (slow, ~30 ms for a full track)
     const bin = atob(MUSIC_DATA[id]), u8 = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
     return (this.urls[id] = URL.createObjectURL(new Blob([u8], { type: 'audio/mpeg' })));
+  },
+  // decode the tracks one at a time in the background so starting a theme never freezes a frame
+  async prewarm() {
+    if (typeof MUSIC_DATA === 'undefined') return;
+    for (const id of Object.keys(MUSIC_DATA)) {
+      if (this.urls[id]) continue;
+      try {
+        const blob = await (await fetch('data:audio/mpeg;base64,' + MUSIC_DATA[id])).blob();
+        if (!this.urls[id]) this.urls[id] = URL.createObjectURL(blob);
+      } catch (e) { }
+      await new Promise(r => setTimeout(r, 50));
+    }
   },
   el(id) {
     if (!this.els[id]) {
@@ -4826,7 +4849,7 @@ addEventListener('keydown', e => {
   }
   if (!keys.has(e.code)) keyEdges.push(e.code);
   keys.add(e.code);
-  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(e.code)) e.preventDefault();
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab', 'F3'].includes(e.code)) e.preventDefault();
 });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -4880,8 +4903,8 @@ const Sfx = {
   unlock() { if (!this.ac) { try { this.ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { } } if (this.ac && this.ac.state === 'suspended') this.ac.resume(); },
   noise(dur, f0, f1, gain, type = 'bandpass', delay = 0) {
     const ac = this.ac, n = ac.createBufferSource(), len = Math.floor(ac.sampleRate * dur), t0 = ac.currentTime + delay;
-    const buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    let buf = (this.nbuf || (this.nbuf = {}))[len];
+    if (!buf) { buf = this.nbuf[len] = ac.createBuffer(1, len, ac.sampleRate); const d = buf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len); }
     n.buffer = buf; const f = ac.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(f0, t0);
     f.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
     const g = ac.createGain(); g.gain.value = gain * this.vol; n.connect(f).connect(g).connect(ac.destination); n.start(t0);
@@ -4945,6 +4968,7 @@ function tick() {
   netPump();
   const pad = [padInput(0), padInput(1)];
   const edges = keyEdges.splice(0);
+  if (edges.includes('F3')) { PERF.on = !PERF.on; try { localStorage.setItem('umavs.fps', PERF.on ? '1' : ''); } catch (e) { } }
   const raw = [orIn(kbInput(0, edges), pad[0].o), orIn(kbInput(1, edges), pad[1].o)];
   const startPressed = [0, 1].some(i => pad[i].start && !padPrevStart[i]);
   padPrevStart = [pad[0].start, pad[1].start];
@@ -5269,6 +5293,7 @@ function render() {
   baseT();
   try { renderScreen(); } finally {
     baseT();
+    if (PERF.on) drawPerf();
     if (toastT > 0) { toastT--; ctx.globalAlpha = Math.min(1, toastT / 20); slant(W / 2 - 270, HGT - 94, 540, 34, 10, 'rgba(12,17,38,.95)'); ctx.fillStyle = PAL.gold; ctx.fillRect(W / 2 - 262, HGT - 94, 524, 2); label(toastMsg, W / 2 + 5, HGT - 76, 16, '#fff', 'center', 700); ctx.globalAlpha = 1; }
   }
 }
@@ -5295,8 +5320,23 @@ function renderScreen() {
 
 // ------------------------------------------------------------------ loop
 let acc = 0, last = performance.now();
+// F3: frame-rate readout (frames per second, average and worst frame time over the last second)
+const PERF = { on: (() => { try { return !!localStorage.getItem('umavs.fps'); } catch (e) { return false; } })(), frames: 0, work: 0, worst: 0, t0: 0, text: '' };
+function drawPerf() {
+  ctx.fillStyle = 'rgba(0,0,0,.8)'; ctx.fillRect(0, 0, 214, 17);
+  label(PERF.text || '…', 6, 9, 12, '#9dffb4', 'left', 700);
+}
 function loop(now) {
   const dt = 1000 / 60;
+  if (PERF.on) {
+    if (!PERF.t0) PERF.t0 = now;
+    PERF.frames++; const gap = now - last; if (gap > PERF.worst) PERF.worst = gap;
+    if (now - PERF.t0 >= 1000) {
+      PERF.text = `${Math.round(PERF.frames * 1000 / (now - PERF.t0))} fps · work ${(PERF.work / PERF.frames).toFixed(1)} ms · worst ${PERF.worst.toFixed(0)} ms · ${SET.gfx}`;
+      PERF.frames = 0; PERF.work = 0; PERF.worst = 0; PERF.t0 = now;
+    }
+  }
+  const w0 = performance.now();
   let el = Math.min(250, now - last); last = now;
   // on a 60 Hz screen frames arrive every ~16.7 ms give or take a millisecond. Treat those as exactly one
   // tick, otherwise the jitter sometimes gives 0 ticks then 2 and the game visibly hitches.
@@ -5306,6 +5346,7 @@ function loop(now) {
   while (acc >= dt - 0.5 && n < 4) { tick(); acc -= dt; n++; }
   if (n === 4) acc = 0;   // way behind (tab was hidden, slow machine): don't try to catch up
   if (n > 0) render();    // nothing changed since the last picture, so skip redrawing (saves work on 120 Hz+ screens)
+  if (PERF.on) PERF.work += performance.now() - w0;
   requestAnimationFrame(loop);
 }
 function cycleGfx(d) { SET.gfx = GFX[(GFX.indexOf(SET.gfx) + d + GFX.length) % GFX.length]; saveSet(); fit(); }
@@ -5324,7 +5365,7 @@ addEventListener('resize', fit);
 const fontsReady = document.fonts ? Promise.all(['600 16px "Barlow Condensed"', 'italic 800 16px "Barlow Condensed"', 'italic 900 16px "Barlow Condensed"']
   .map(f => document.fonts.load(f).catch(() => null))) : Promise.resolve();
 Music.load();
-fontsReady.then(() => loadAssets()).then(() => { ledCache.clear(); initNetPanel(); initAcctPanel(); acctInit(); fit(); requestAnimationFrame(loop); });
+fontsReady.then(() => loadAssets()).then(() => { ledCache.clear(); initNetPanel(); initAcctPanel(); acctInit(); fit(); Music.prewarm(); requestAnimationFrame(loop); });
 
 // ------------------------------------------------------------------ fullscreen
 function toggleFullscreen() {

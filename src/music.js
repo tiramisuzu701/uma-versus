@@ -14,9 +14,22 @@ const Music = {
   url(id) {
     if (this.urls[id]) return this.urls[id];
     if (typeof MUSIC_DATA === 'undefined' || !MUSIC_DATA[id]) return null;
+    // not prewarmed yet: decode now (slow, ~30 ms for a full track)
     const bin = atob(MUSIC_DATA[id]), u8 = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
     return (this.urls[id] = URL.createObjectURL(new Blob([u8], { type: 'audio/mpeg' })));
+  },
+  // decode the tracks one at a time in the background so starting a theme never freezes a frame
+  async prewarm() {
+    if (typeof MUSIC_DATA === 'undefined') return;
+    for (const id of Object.keys(MUSIC_DATA)) {
+      if (this.urls[id]) continue;
+      try {
+        const blob = await (await fetch('data:audio/mpeg;base64,' + MUSIC_DATA[id])).blob();
+        if (!this.urls[id]) this.urls[id] = URL.createObjectURL(blob);
+      } catch (e) { }
+      await new Promise(r => setTimeout(r, 50));
+    }
   },
   el(id) {
     if (!this.els[id]) {

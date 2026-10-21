@@ -4,7 +4,7 @@
 
 A fan-made 2D fighting game with the Umamusume cast. It runs in the browser, no install needed.
 
-**Update 1.8.1 · build `7d7788`**
+**Update 1.8.2 · build `7d7788`**
 
 - 8 characters, each with her own play style
 - Local versus, VS CPU with four difficulty levels, a training mode with frame data and hitboxes, combo trials and replays
@@ -34,4 +34,4 @@ The wiki has the full guide, frame data for every move and all the combos: https
 - Accounts: supabase-js, MIT License (see `vendor/`).
 
 DISCLAIMER:
-I used AI to help with some bits and pieces of the coding process because I'm lazy and it's hard ok don't obliterate me please
+Made with AI help on the code. The game itself, the characters and the design are mine, and I've tested and tuned everything. Please don't obliterate me

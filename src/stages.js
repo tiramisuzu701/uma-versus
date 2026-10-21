@@ -200,12 +200,15 @@ function buildNakayama() {
   prect(n, '#5a4a40', 0, 170, PW, 10); prect(n, '#f4f4f4', 0, 166, PW, 2);
   for (let x = 0; x < PW; x += 3) prect(n, '#e8eef8', x, 169 + Math.floor(r() * 2), 3, 2);
 
-  const lamp = (c, x, y, rad, a) => { const g = c.createRadialGradient(x, y, 2, x, y, rad); g.addColorStop(0, `rgba(255,248,210,${a})`); g.addColorStop(1, 'rgba(255,248,210,0)'); c.fillStyle = g; c.fillRect(x - rad, y - rad, rad * 2, rad * 2); };
+  const lampC = canvasOf(160, 160); { const l = lampC.getContext('2d'), g = l.createRadialGradient(80, 80, 2, 80, 80, 80); g.addColorStop(0, 'rgba(255,248,210,0.55)'); g.addColorStop(1, 'rgba(255,248,210,0)'); l.fillStyle = g; l.fillRect(0, 0, 160, 160); }
+  const lamp = (c, x, y) => c.drawImage(lampC, x - 80, y - 80);
   const back = (c, left, t) => {
     // star twinkle
-    for (let i = 0; i < stars.length; i += 3) { const [x, y] = stars[i]; if (y > 38) continue; const a = 0.5 + 0.5 * Math.sin(t / 14 + i); c.fillStyle = `rgba(255,255,255,${a})`; c.fillRect(x * PX - left * 0.35, y * PX, 3, 3); }
+    c.fillStyle = '#fff';
+    for (let i = 0; i < stars.length; i += 3) { const [x, y] = stars[i]; if (y > 38) continue; c.globalAlpha = 0.5 + 0.5 * Math.sin(t / 14 + i); c.fillRect(x * PX - left * 0.35, y * PX, 3, 3); }
+    c.globalAlpha = 1;
     c.save(); c.globalCompositeOperation = 'lighter';
-    for (const tx of towers) lamp(c, tx * PX - left * 0.65, 24, 80, 0.55);
+    for (const tx of towers) lamp(c, tx * PX - left * 0.65, 24);
     garland.forEach(([x, y], i) => {
       const on = ((i + Math.floor(t / 12)) % 4) !== 0;
       if (!on) return;
@@ -215,12 +218,14 @@ function buildNakayama() {
     c.restore(); c.globalAlpha = 1;
   };
   const front = (c, left, t) => {   // snowfall in front of everything
+    c.fillStyle = 'rgb(245,248,255)';
     for (let i = 0; i < 70; i++) {
       const sp = 0.6 + (i % 5) * 0.25, sz = i % 7 === 0 ? 4 : i % 3 === 0 ? 3 : 2;
       const x = ((i * 137 + Math.sin(t / 50 + i) * 20 + t * 0.3 - left * (0.3 + sp * 0.3)) % W + W) % W;
       const y = (i * 61 + t * sp) % (HGT + 20) - 10;
-      c.fillStyle = `rgba(245,248,255,${0.55 + (i % 3) * 0.15})`; c.fillRect(x, y, sz, sz);
+      c.globalAlpha = 0.55 + (i % 3) * 0.15; c.fillRect(x, y, sz, sz);
     }
+    c.globalAlpha = 1;
   };
   return { far, mid, near, back, front };
 }
@@ -292,15 +297,20 @@ function buildLive() {
   };
   const front = (c, left, t) => {   // footlights, then the crowd in front of the stage with penlights
     foot.forEach((x, i) => { c.fillStyle = (Math.floor(t / 10) + i) % 3 ? '#ffd27a' : '#ff9ad0'; c.fillRect(x * PX - left, 169 * PX, 18, 4); });
-    for (let i = 0; i < 46; i++) {
-      const bx = ((i * 41 - left * 1.15) % (W + 80) + W + 80) % (W + 80) - 40, by = HGT - 14 + (i % 3) * 5;
-      const sway = Math.sin(t / 12 + (i % 6)) * 0.6, col = COLS[(i * 7) % COLS.length];
-      c.save(); c.translate(bx + 10, by); c.rotate(sway);
-      c.globalCompositeOperation = 'lighter'; c.fillStyle = col + '44'; c.fillRect(-4, -30, 8, 20); c.globalCompositeOperation = 'source-over';
+    const crowd = [];
+    for (let i = 0; i < 46; i++) crowd.push([((i * 41 - left * 1.15) % (W + 80) + W + 80) % (W + 80) - 40, HGT - 14 + (i % 3) * 5, Math.sin(t / 12 + (i % 6)) * 0.6, COLS[(i * 7) % COLS.length]]);
+    const stick = (bx, by, sway) => { c.translate(bx + 10, by); c.rotate(sway); };
+    c.save(); c.globalCompositeOperation = 'lighter';   // penlight glows
+    for (const [bx, by, sway, col] of crowd) { c.save(); stick(bx, by, sway); c.fillStyle = col + '44'; c.fillRect(-4, -30, 8, 20); c.restore(); }
+    c.restore();
+    for (const [bx, by, sway, col] of crowd) {   // penlights
+      c.save(); stick(bx, by, sway);
       c.fillStyle = col; c.globalAlpha = 0.75; c.fillRect(-1.5, -28, 3, 18); c.globalAlpha = 1; c.fillStyle = '#c8c8d4'; c.fillRect(-1.5, -10, 3, 6);
       c.restore();
-      c.fillStyle = '#07040d'; c.beginPath(); c.arc(bx + 6, by + 8, 13, 0, 7); c.fill(); c.fillRect(bx - 10, by + 14, 34, 20);
     }
+    c.fillStyle = '#07040d'; c.beginPath();   // heads and shoulders, one path
+    for (const [bx, by] of crowd) { c.moveTo(bx + 19, by + 8); c.arc(bx + 6, by + 8, 13, 0, 7); c.rect(bx - 10, by + 14, 34, 20); }
+    c.fill();
   };
   return { far, mid, near, back, front };
 }

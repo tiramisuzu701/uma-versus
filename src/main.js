@@ -45,7 +45,7 @@ addEventListener('keydown', e => {
   }
   if (!keys.has(e.code)) keyEdges.push(e.code);
   keys.add(e.code);
-  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(e.code)) e.preventDefault();
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab', 'F3'].includes(e.code)) e.preventDefault();
 });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -99,8 +99,8 @@ const Sfx = {
   unlock() { if (!this.ac) { try { this.ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { } } if (this.ac && this.ac.state === 'suspended') this.ac.resume(); },
   noise(dur, f0, f1, gain, type = 'bandpass', delay = 0) {
     const ac = this.ac, n = ac.createBufferSource(), len = Math.floor(ac.sampleRate * dur), t0 = ac.currentTime + delay;
-    const buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    let buf = (this.nbuf || (this.nbuf = {}))[len];
+    if (!buf) { buf = this.nbuf[len] = ac.createBuffer(1, len, ac.sampleRate); const d = buf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len); }
     n.buffer = buf; const f = ac.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(f0, t0);
     f.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
     const g = ac.createGain(); g.gain.value = gain * this.vol; n.connect(f).connect(g).connect(ac.destination); n.start(t0);
@@ -164,6 +164,7 @@ function tick() {
   netPump();
   const pad = [padInput(0), padInput(1)];
   const edges = keyEdges.splice(0);
+  if (edges.includes('F3')) { PERF.on = !PERF.on; try { localStorage.setItem('umavs.fps', PERF.on ? '1' : ''); } catch (e) { } }
   const raw = [orIn(kbInput(0, edges), pad[0].o), orIn(kbInput(1, edges), pad[1].o)];
   const startPressed = [0, 1].some(i => pad[i].start && !padPrevStart[i]);
   padPrevStart = [pad[0].start, pad[1].start];
@@ -488,6 +489,7 @@ function render() {
   baseT();
   try { renderScreen(); } finally {
     baseT();
+    if (PERF.on) drawPerf();
     if (toastT > 0) { toastT--; ctx.globalAlpha = Math.min(1, toastT / 20); slant(W / 2 - 270, HGT - 94, 540, 34, 10, 'rgba(12,17,38,.95)'); ctx.fillStyle = PAL.gold; ctx.fillRect(W / 2 - 262, HGT - 94, 524, 2); label(toastMsg, W / 2 + 5, HGT - 76, 16, '#fff', 'center', 700); ctx.globalAlpha = 1; }
   }
 }
@@ -514,8 +516,23 @@ function renderScreen() {
 
 // ------------------------------------------------------------------ loop
 let acc = 0, last = performance.now();
+// F3: frame-rate readout (frames per second, average and worst frame time over the last second)
+const PERF = { on: (() => { try { return !!localStorage.getItem('umavs.fps'); } catch (e) { return false; } })(), frames: 0, work: 0, worst: 0, t0: 0, text: '' };
+function drawPerf() {
+  ctx.fillStyle = 'rgba(0,0,0,.8)'; ctx.fillRect(0, 0, 214, 17);
+  label(PERF.text || '…', 6, 9, 12, '#9dffb4', 'left', 700);
+}
 function loop(now) {
   const dt = 1000 / 60;
+  if (PERF.on) {
+    if (!PERF.t0) PERF.t0 = now;
+    PERF.frames++; const gap = now - last; if (gap > PERF.worst) PERF.worst = gap;
+    if (now - PERF.t0 >= 1000) {
+      PERF.text = `${Math.round(PERF.frames * 1000 / (now - PERF.t0))} fps · work ${(PERF.work / PERF.frames).toFixed(1)} ms · worst ${PERF.worst.toFixed(0)} ms · ${SET.gfx}`;
+      PERF.frames = 0; PERF.work = 0; PERF.worst = 0; PERF.t0 = now;
+    }
+  }
+  const w0 = performance.now();
   let el = Math.min(250, now - last); last = now;
   // on a 60 Hz screen frames arrive every ~16.7 ms give or take a millisecond. Treat those as exactly one
   // tick, otherwise the jitter sometimes gives 0 ticks then 2 and the game visibly hitches.
@@ -525,6 +542,7 @@ function loop(now) {
   while (acc >= dt - 0.5 && n < 4) { tick(); acc -= dt; n++; }
   if (n === 4) acc = 0;   // way behind (tab was hidden, slow machine): don't try to catch up
   if (n > 0) render();    // nothing changed since the last picture, so skip redrawing (saves work on 120 Hz+ screens)
+  if (PERF.on) PERF.work += performance.now() - w0;
   requestAnimationFrame(loop);
 }
 function cycleGfx(d) { SET.gfx = GFX[(GFX.indexOf(SET.gfx) + d + GFX.length) % GFX.length]; saveSet(); fit(); }
@@ -543,7 +561,7 @@ addEventListener('resize', fit);
 const fontsReady = document.fonts ? Promise.all(['600 16px "Barlow Condensed"', 'italic 800 16px "Barlow Condensed"', 'italic 900 16px "Barlow Condensed"']
   .map(f => document.fonts.load(f).catch(() => null))) : Promise.resolve();
 Music.load();
-fontsReady.then(() => loadAssets()).then(() => { ledCache.clear(); initNetPanel(); initAcctPanel(); acctInit(); fit(); requestAnimationFrame(loop); });
+fontsReady.then(() => loadAssets()).then(() => { ledCache.clear(); initNetPanel(); initAcctPanel(); acctInit(); fit(); Music.prewarm(); requestAnimationFrame(loop); });
 
 // ------------------------------------------------------------------ fullscreen
 function toggleFullscreen() {

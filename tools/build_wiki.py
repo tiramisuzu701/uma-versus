@@ -260,7 +260,7 @@ HOME2 = f"""
   <h2>Archetypes</h2>
   <div class="tw"><table class="atab"><thead><tr><th>Archetype</th><th>Plays like</th><th>Characters</th></tr></thead><tbody>{archrows}</tbody></table></div>
   <h2>Getting started</h2>
-  <ul><li><a href="#systems" data-go="systems">How to play</a>: controls, notation, defense and combos</li><li><a href="#stages" data-go="stages">Stages</a></li><li><a href="#update18" data-go="update18">Latest patch notes (1.8.1)</a></li></ul>
+  <ul><li><a href="#systems" data-go="systems">How to play</a>: controls, notation, defense and combos</li><li><a href="#stages" data-go="stages">Stages</a></li><li><a href="#update18" data-go="update18">Latest patch notes (1.8.2)</a></li></ul>
 </section>"""
 
 CSS = """
@@ -414,6 +414,12 @@ UPDATE18 = f"""
   <h1 class="ptitle">Update 1.8</h1>
   <p class="tagline">Patch notes · build {BUILD}</p>
   <div class="prose">
+  <h2>1.8.2</h2>
+  <ul><li>Fixed a freeze of about a twentieth of a second at the start of each match, when the battle theme loaded. Music now loads in the background after the game opens.</li>
+  <li>Hit sounds reuse their audio instead of making new audio on every hit, which cuts down on small stutters mid-fight.</li>
+  <li>Winning Live and Nakayama Nights draw their lights and snow with less work per frame.</li>
+  <li>Press <b>F3</b> to show frames per second, frame time and the worst frame in the last second.</li>
+  <li>Same build as 1.8.1, so 1.8.1 and 1.8.2 can play each other online.</li></ul>
   <h2>1.8.1</h2>
   <ul><li>The Sharp text option is now <b>Graphics: Low / Medium / High</b> in Options and the pause menu. Low is the original 960×540 picture, Medium is sharper, High is full resolution. Medium is the default.</li>
   <li>Smoother frame pacing on 60 Hz screens, and less work per frame on 120 Hz and higher.</li>

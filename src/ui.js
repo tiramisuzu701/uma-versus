@@ -1,4 +1,4 @@
-const VERSION = '1.8.1';
+const VERSION = '1.8.2';
 // Menus and HUD. The look is race day: gate colours, tote-board LED text,
 // saddlecloth name plates, rosettes for round wins.
 'use strict';
