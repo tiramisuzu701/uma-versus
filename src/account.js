@@ -1,7 +1,7 @@
 // ============================================================================
 //  Accounts (Update 1.8): optional sign-in with email + password, a public
 //  profile (name + favourite runner), cloud save of settings, and a match
-//  history for online and VS CPU matches. Guests can do everything else.
+//  history of online matches (VS CPU is never recorded, so it can't pad stats). Guests can do everything else.
 //  Nothing here touches the simulation.
 // ============================================================================
 'use strict';
@@ -84,9 +84,9 @@ async function acctRefresh() {
     const [p, s, r] = await Promise.all([
       db.from('profiles').select('name, fav_runner, created_at').eq('id', id).maybeSingle(),
       db.from('player_stats').select('*').eq('user_id', id).maybeSingle(),
-      db.from('match_results').select('mode, my_runner, opp_runner, opp_name, won, rounds_won, rounds_lost, created_at').eq('user_id', id).order('created_at', { ascending: false }).limit(8)]);
+      db.from('match_results').select('mode, my_runner, opp_runner, opp_name, won, rounds_won, rounds_lost, created_at').eq('user_id', id).eq('mode', 'online').order('created_at', { ascending: false }).limit(8)]);
     if (p.error) throw p.error;
-    ACCT.profile = p.data; ACCT.stats = s.data || { games: 0, wins: 0, online_games: 0, online_wins: 0, main_runner: null }; ACCT.recent = r.data || [];
+    ACCT.profile = p.data; ACCT.stats = s.data || { games: 0, wins: 0, losses: 0, main_runner: null }; ACCT.recent = r.data || [];
   } catch (e) { acctSay(acctErr(e), false); }
 }
 async function acctSetFav(cid) {
@@ -130,12 +130,11 @@ async function acctPush(force) {
 
 // ------------------------------------------------------------------ match history
 function acctWho() { return acctOn() && ACCT.profile ? { id: ACCT.user.id, name: ACCT.profile.name, fav: ACCT.profile.fav_runner } : null; }
-async function acctRecord() {
-  const online = G.mode === 'online', side = online ? Net.side : 0, me = G.p[side], them = G.p[1 - side];
-  const who = online ? Net.theirWho : null;
-  const row = { user_id: ACCT.user.id, mode: online ? 'online' : 'cpu', build: BUILD, my_runner: me.cid, opp_runner: them.cid,
-    match_key: online ? (Net.matchKey || ('m' + Date.now())) : ('cpu-' + Date.now() + '-' + Math.floor(Math.random() * 1e6)),
-    opp_id: who && who.id ? who.id : null, opp_name: online ? (who && who.name ? who.name : 'Guest') : 'CPU · ' + CPU_NAMES[G.cpuLevel || 2],
+async function acctRecord() {   // online matches only
+  const side = Net.side, me = G.p[side], them = G.p[1 - side], who = Net.theirWho;
+  const row = { user_id: ACCT.user.id, mode: 'online', build: BUILD, my_runner: me.cid, opp_runner: them.cid,
+    match_key: Net.matchKey || ('m' + Date.now()),
+    opp_id: who && who.id ? who.id : null, opp_name: who && who.name ? who.name : 'Guest',
     won: me.wins > them.wins, rounds_won: Math.min(3, me.wins), rounds_lost: Math.min(3, them.wins), stage: G.stage || 0 };
   try {
     let { error } = await ACCT.client.from('match_results').insert(row);
@@ -145,7 +144,7 @@ async function acctRecord() {
 }
 function acctTick() {
   if (!acctOn()) return;
-  if (G.phase === 'match' && (G.mode === 'online' || G.mode === 'cpu') && G.p.length && ACCT.recFor !== G.p[0]) { ACCT.recFor = G.p[0]; acctRecord(); }
+  if (G.phase === 'match' && G.mode === 'online' && G.p.length && ACCT.recFor !== G.p[0]) { ACCT.recFor = G.p[0]; acctRecord(); }
   if (ACCT.pullDone && ++ACCT.pushT % 600 === 0) acctPush(false);   // cloud save every 10 seconds if anything changed
 }
 

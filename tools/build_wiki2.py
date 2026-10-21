@@ -418,8 +418,11 @@ UPDATE18 = f"""
   <li>Sign up with an email, a password, a display name and a favourite runner. Names are unique, 3–16 characters long.</li>
   <li><b>Your name online</b>: opponents see your display name in the lobby and during the match.</li>
   <li><b>Cloud save</b>: controls, volume, Options and combo-trial progress follow you to any browser. The first time you sign in, the settings in that browser become your account's.</li>
-  <li><b>Match history</b>: online and VS CPU matches are saved while you're signed in. The Account screen shows your matches, wins, win rate, online record, most-played runner and your last few results.</li>
+  <li><b>Match history</b>: online matches are saved while you're signed in. The Account screen shows your online record (matches, wins, losses, win rate), most-played runner and your last few results. VS CPU matches are never recorded, so they can't inflate a win rate.</li>
   <li>The title screen shows who is signed in.</li></ul>
+  <h2>Sharper picture</h2>
+  <ul><li>The game now draws at your screen's real resolution instead of stretching a 960×540 image, so text, menus, the HUD and the logo are sharp at any window size and on high-DPI screens. Sprites keep their pixel-art look.</li>
+  <li>New option <b>Sharp text (high resolution)</b> in Options. Turn it off on a slow computer to go back to the classic low-resolution picture.</li></ul>
   <h2>Privacy</h2>
   <ul><li>Your email and password are only used to sign in and are never shown to anyone. Your display name, favourite runner and match results are public, so other players can see them. Settings are private to your account.</li>
   <li>Each player can only add results to their own history.</li></ul>

@@ -266,6 +266,7 @@ function tick() {
       Music.save();
     }
     if ((e.l || e.r || e.L || e.S || enter) && r.k === 'calm') { SET.calm = !SET.calm; saveSet(); Sfx.play('menu'); }
+    if ((e.l || e.r || e.L || e.S || enter) && r.k === 'sharp') { SET.sharp = !SET.sharp; saveSet(); fit(); Sfx.play('menu'); }
     if ((e.L || e.S || enter) && r.k === 'full') { toggleFullscreen(); Sfx.play('menu'); }
     if (e.L || e.S || enter) {
       if (r.k === 'track') { MD.jukebox = r.id; Music.play(r.id, 0.4, 0.5, true); Sfx.play('ok'); }
@@ -476,9 +477,9 @@ function controlsTick(edges, esc, enter, e) {
 }
 
 function render() {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  baseT();
   try { renderScreen(); } finally {
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    baseT();
     if (toastT > 0) { toastT--; ctx.globalAlpha = Math.min(1, toastT / 20); slant(W / 2 - 270, HGT - 94, 540, 34, 10, 'rgba(12,17,38,.95)'); ctx.fillStyle = PAL.gold; ctx.fillRect(W / 2 - 262, HGT - 94, 524, 2); label(toastMsg, W / 2 + 5, HGT - 76, 16, '#fff', 'center', 700); ctx.globalAlpha = 1; }
   }
 }
@@ -515,7 +516,14 @@ function loop(now) {
 function fit() {
   const s = Math.min(innerWidth / W, innerHeight / HGT);
   cv.style.width = Math.floor(W * s) + 'px'; cv.style.height = Math.floor(HGT * s) + 'px';
+  // draw at the real pixel size of the window (sharp text), capped so huge screens stay fast
+  const r = SET.sharp ? Math.min(2560 / W, Math.max(1, Math.floor(W * s * (window.devicePixelRatio || 1)) / W)) : 1;
+  if (Math.abs(r - RES) > 0.001 || cv.width !== Math.round(W * r)) {
+    RES = r; cv.width = Math.round(W * r); cv.height = Math.round(HGT * r);
+    ctx.imageSmoothingEnabled = false;   // resizing a canvas resets its drawing state
+  }
 }
+if (window.matchMedia) try { matchMedia('(resolution: 1dppx)').addEventListener('change', fit); } catch (e) { }
 addEventListener('resize', fit);
 const fontsReady = document.fonts ? Promise.all(['600 16px "Barlow Condensed"', 'italic 800 16px "Barlow Condensed"', 'italic 900 16px "Barlow Condensed"']
   .map(f => document.fonts.load(f).catch(() => null))) : Promise.resolve();

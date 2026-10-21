@@ -63,13 +63,15 @@ async def handle(route):
             DB['settings'][uid] = {'user_id': uid, 'data': b['data'], 'updated_at': 'now'}; return await route.fulfill(status=201, headers={'access-control-allow-origin': '*'})
     if tbl == 'player_stats':
         rs = [r for r in DB['results'] if r['user_id'] == uid]
-        st = {'user_id': uid, 'games': len(rs), 'wins': sum(r['won'] for r in rs), 'online_games': sum(r['mode'] == 'online' for r in rs), 'online_wins': sum(r['mode'] == 'online' and r['won'] for r in rs), 'main_runner': rs[0]['my_runner'] if rs else None}
+        rs = [r for r in rs if r['mode'] == 'online']
+        st = {'user_id': uid, 'games': len(rs), 'wins': sum(r['won'] for r in rs), 'losses': sum(not r['won'] for r in rs), 'main_runner': rs[0]['my_runner'] if rs else None}
         return await J((st if rs else None) if obj else ([st] if rs else []))
     if tbl == 'match_results':
         if req.method == 'GET': return await J([dict(r, created_at='2026-10-21T19:30:00Z') for r in DB['results'] if r['user_id'] == eqv(q, 'user_id')][::-1])
         if req.method == 'POST':
             b = json.loads(body); b = b[0] if isinstance(b, list) else b
             if b['user_id'] != uid: return await J({'code': '42501', 'message': 'row-level security'}, 403)
+            if b['mode'] != 'online': return await J({'code': '23514', 'message': 'violates check constraint "match_results_online_only"'}, 400)
             DB['results'].append(b); return await route.fulfill(status=201, headers={'access-control-allow-origin': '*'})
     return await J({'message': 'unhandled ' + path}, 404)
 
@@ -98,13 +100,13 @@ async def main():
         # VS CPU match result gets recorded
         await ev("() => { G.cpuLevel = 4; startMatch('cpu', 'tt', 'ds'); G.p[0].wins = 2; G.p[1].wins = 1; G.phase = 'match'; acctTick(); }")
         await pg.wait_for_timeout(800)
-        ok('VS CPU result recorded', len(DB['results']) == 1 and DB['results'][0]['won'] and DB['results'][0]['opp_name'] == 'CPU · G1', DB['results'][:1])
-        await ev("() => { acctTick(); acctTick(); }"); await pg.wait_for_timeout(300)
-        ok('recorded once per match', len(DB['results']) == 1)
-        ok('stats refreshed', await ev("ACCT.stats && ACCT.stats.games === 1 && ACCT.recent.length === 1"), await ev('JSON.stringify(ACCT.stats)'))
+        ok('VS CPU match NOT recorded', len(DB['results']) == 0, DB['results'][:1])
         # online result uses the shared match key and the opponent's name
         await ev("() => { Net.side = 1; Net.matchKey = 'sess-3'; Net.theirWho = { id: '', name: 'Rival' }; startMatch('online', 'kb', 'tt'); G.p[1].wins = 0; G.p[0].wins = 2; G.phase = 'match'; acctTick(); }")
         await pg.wait_for_timeout(800)
+        await ev("() => { acctTick(); acctTick(); }"); await pg.wait_for_timeout(300)
+        ok('online match recorded once', len(DB['results']) == 1, len(DB['results']))
+        ok('stats refreshed', await ev("ACCT.stats && ACCT.stats.games === 1 && ACCT.stats.losses === 1 && ACCT.recent.length === 1"), await ev('JSON.stringify(ACCT.stats)'))
         r2 = DB['results'][-1]
         ok('online result: side, key, opponent', r2['mode'] == 'online' and r2['match_key'] == 'sess-3' and r2['my_runner'] == 'tt' and not r2['won'] and r2['opp_name'] == 'Rival' and r2['opp_id'] is None, r2)
         # rename (taken, then free) and favourite runner

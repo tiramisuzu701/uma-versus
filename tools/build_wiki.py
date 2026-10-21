@@ -260,7 +260,7 @@ SYSTEMS = f"""
   <li>Accounts are optional: guests can play every mode. Make one from <b>Account</b> on the main menu with an email, a password, a display name (3–16 letters, numbers, spaces, _ . -) and a favourite runner.</li>
   <li><b>Online name</b>: your display name is shown to your opponent in the lobby and during the match.</li>
   <li><b>Cloud save</b>: controls, volume, Options and combo-trial progress are saved to your account every few seconds and come back when you sign in on another browser or computer.</li>
-  <li><b>Match history</b>: every online and VS CPU match you finish while signed in is saved, with your win rate, online record and most-played runner on the Account screen.</li>
+  <li><b>Match history</b>: every online match you finish while signed in is saved, with your record, win rate and most-played runner on the Account screen. VS CPU matches are not counted, so they can't pad anyone's win rate.</li>
   <li>Change your name or favourite runner, save now, or sign out from the Account screen.</li>
   </ul>
 

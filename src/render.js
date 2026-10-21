@@ -5,6 +5,9 @@
 const cv = document.getElementById('c');
 const ctx = cv.getContext('2d');
 ctx.imageSmoothingEnabled = false;
+// the canvas is drawn at the screen's real resolution: game coordinates stay 960x540, RES scales them up
+let RES = 1;
+function baseT(dx = 0, dy = 0) { ctx.setTransform(RES, 0, 0, RES, dx * RES, dy * RES); }
 const SPR = {};
 
 function loadImg(src) { return new Promise(r => { const i = new Image(); i.onload = () => r(i); i.src = src; }); }
@@ -386,7 +389,7 @@ function drawBoxes(left) {
 // ------------------------------------------------------------------ game frame
 function renderGame() {
   const sh = G.shake && !SET.calm ? (Math.random() - .5) * G.shake * 2 : 0;
-  ctx.setTransform(1, 0, 0, 1, Math.round(sh), Math.round(sh * 0.6));
+  baseT(Math.round(sh), Math.round(sh * 0.6));
   const left = G.cam - W / 2;
   drawStage(G.cam);
   for (const p of G.p) drawShadow(p, left);
@@ -408,7 +411,7 @@ function renderGame() {
     const k = t.t / t.life; ctx.globalAlpha = k > 0.7 ? (1 - k) / 0.3 : 1;
     txt(t.txt, t.x - left, t.y - t.t * 0.6, t.size, t.color); ctx.globalAlpha = 1;
   }
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  baseT();
   drawHUD();
   if (G.mode === 'training') { if (!TR.on) drawTrainingHUD(); drawInputDisplay(); drawFrameMeter(); drawTrialHUD(); }
   if (G.phase === 'intro') drawRoundIntro();

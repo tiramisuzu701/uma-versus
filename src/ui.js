@@ -6,7 +6,7 @@ const VERSION = '1.8';   // shown on the title screen and main menu (cosmetic; n
 'use strict';
 
 const SET_KEY = 'umavs.settings';
-const SET = { calm: false };
+const SET = { calm: false, sharp: true };   // sharp: draw at the screen's resolution (off = classic 960x540)
 try { Object.assign(SET, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (e) { }
 function saveSet() { try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (e) { } }
 const FD = '"Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif';
@@ -67,12 +67,13 @@ const LED = (() => {
 const ledCache = new Map();
 function ledText(str, x, y, dot, col = PAL.led, align = 'center', offCol = null) {
   str = String(str).toUpperCase();
-  const key = str + '|' + dot + '|' + col + '|' + offCol;
+  const key = str + '|' + dot + '|' + col + '|' + offCol + '|' + RES;
   let c = ledCache.get(key);
   if (!c) {
     const pitch = dot * 1.25, cw = 6 * pitch, pad = dot * 2;
-    c = canvasOf(Math.ceil(str.length * cw + pad * 2), Math.ceil(7 * pitch + pad * 2));
-    const x2 = c.getContext('2d');
+    const lw = Math.ceil(str.length * cw + pad * 2), lh = Math.ceil(7 * pitch + pad * 2);   // drawn at screen resolution
+    c = canvasOf(Math.ceil(lw * RES), Math.ceil(lh * RES)); c.lw = lw; c.lh = lh;
+    const x2 = c.getContext('2d'); x2.scale(RES, RES);
     for (const pass of [0, 1]) {
       if (pass === 0 && !offCol) continue;
       if (pass === 1) { x2.shadowColor = col; x2.shadowBlur = dot * 1.6; }
@@ -89,9 +90,9 @@ function ledText(str, x, y, dot, col = PAL.led, align = 'center', offCol = null)
     if (ledCache.size > 300) ledCache.clear();
     ledCache.set(key, c);
   }
-  const ox = align === 'center' ? x - c.width / 2 : align === 'right' ? x - c.width : x;
-  ctx.drawImage(c, Math.round(ox), Math.round(y - c.height / 2));
-  return c.width;
+  const ox = align === 'center' ? x - c.lw / 2 : align === 'right' ? x - c.lw : x;
+  ctx.drawImage(c, Math.round(ox), Math.round(y - c.lh / 2), c.lw, c.lh);
+  return c.lw;
 }
 
 // ---------------------------------------------------------------- shapes
@@ -161,7 +162,7 @@ function portrait(cid, alt, x, y, size, flip) { face(cid, alt, x, y, size, flip)
 
 // ---------------------------------------------------------------- shared backdrop
 function menuBg(dim = 0.55) {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  baseT();
   const cycle = ['title', 'mode'].includes(UI.screen);
   if (cycle) menuStage = Math.floor(UI.t / 720) % STAGES.length;
   const cam = STAGE_W / 2 + Math.sin(UI.t / 300) * 400;
@@ -588,7 +589,7 @@ function drawSuperFlash(fo) {
 
 // ---------------------------------------------------------------- pause
 function drawPause() {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  baseT();
   ctx.fillStyle = 'rgba(8,11,28,.55)'; ctx.fillRect(0, 0, W, HGT);
   slant(-40, 0, 420, HGT, 0, 'rgba(12,17,38,.95)'); ctx.fillStyle = PAL.gold; ctx.fillRect(380, 0, 3, HGT);
   txt('PAUSED', 40, 56, 56, '#fff', 'left', PAL.ink);
@@ -790,24 +791,24 @@ function drawMusicSelect() {
 }
 
 // ---------------------------------------------------------------- sound test / audio options
-const SOUND_ROWS = () => [{ k: 'music', label: 'Music volume' }, { k: 'sfx', label: 'Effects volume' }, { k: 'calm', label: 'Reduce flashes & shake' }, { k: 'full', label: 'Fullscreen' }, ...['menu', ...THEME_IDS, 'round3'].map(id => ({ k: 'track', id, label: TRACK_TITLE(id) })), { k: 'back', label: 'Back' }];
+const SOUND_ROWS = () => [{ k: 'music', label: 'Music volume' }, { k: 'sfx', label: 'Effects volume' }, { k: 'calm', label: 'Reduce flashes & shake' }, { k: 'full', label: 'Fullscreen' }, { k: 'sharp', label: 'Sharp text (high resolution)' }, ...['menu', ...THEME_IDS, 'round3'].map(id => ({ k: 'track', id, label: TRACK_TITLE(id) })), { k: 'back', label: 'Back' }];
 function drawSound() {
   menuBg(0.82);
   topBar('OPTIONS', 'saved in this browser');
   const rows = SOUND_ROWS();
   panel(40, 52, 540, 456, PAL.rose);
   rows.forEach((r, i) => {
-    const y = 70 + i * 28, sel = i === UI.soundIdx;
-    if (sel) slant(52, y - 13, 516, 26, 8, 'rgba(255,255,255,.95)');
+    const y = 68 + i * 24, sel = i === UI.soundIdx;
+    if (sel) slant(52, y - 11, 516, 22, 8, 'rgba(255,255,255,.95)');
     const col = sel ? PAL.ink : '#e6e9f8';
     if (r.k === 'music' || r.k === 'sfx') {
       label(r.label, 70, y, 17, col, 'left', 800, true);
       const v = r.k === 'music' ? Music.vol : Sfx.vol;
       meterBar(300, y - 7, 200, 14, Math.round(v * 5), PAL.turf);
       label(`${Math.round(v * 100)}%`, 548, y, 15, col, 'right', 800, true);
-    } else if (r.k === 'calm' || r.k === 'full') {
+    } else if (r.k === 'calm' || r.k === 'full' || r.k === 'sharp') {
       label(r.label, 70, y, 17, col, 'left', 800, true);
-      label(r.k === 'calm' ? (SET.calm ? 'ON' : 'OFF') : (document.fullscreenElement ? 'ON' : 'OFF'), 548, y, 15, col, 'right', 900, true);
+      label((r.k === 'calm' ? SET.calm : r.k === 'sharp' ? SET.sharp : document.fullscreenElement) ? 'ON' : 'OFF', 548, y, 15, col, 'right', 900, true);
     } else if (r.k === 'track') {
       const playing = MD.jukebox === r.id && Music.cur === r.id;
       label((playing ? '♪ ' : '') + r.label, 70, y, 17, playing && !sel ? PAL.gold : col, 'left', 800, true);
@@ -842,10 +843,11 @@ function drawAccount() {
   plate(50, 78, 360, 44, c.color, 14); label(p ? p.name : '…', 70, 101, 30, '#fff', 'left', 900, true);
   label(p ? 'joined ' + new Date(p.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '', 404, 140, 13, PAL.dim, 'right', 700);
   // stats
-  const games = st.games || 0, wins = st.wins || 0, og = st.online_games || 0, ow = st.online_wins || 0;
-  const boxes = [['MATCHES', String(games)], ['WINS', String(wins)], ['WIN RATE', games ? Math.round(100 * wins / games) + '%' : '—'], ['ONLINE', og ? `${ow}-${og - ow}` : '—']];
+  const games = st.games || 0, wins = st.wins || 0, losses = st.losses ?? (games - wins);   // online matches only
+  label('ONLINE RECORD', 50, 312, 12, PAL.dim, 'left', 800, true);
+  const boxes = [['MATCHES', String(games)], ['WINS', String(wins)], ['LOSSES', String(losses)], ['WIN RATE', games ? Math.round(100 * wins / games) + '%' : '—']];
   boxes.forEach(([k, v], i) => { const x = 46 + i * 92; rrect(x, 322, 84, 58, 5, 'rgba(255,255,255,.06)'); label(k, x + 42, 336, 12, PAL.dim, 'center', 800, true); txt(v, x + 42, 362, 26, '#fff'); });
-  if (st.main_runner) { label('MOST PLAYED', 50, 404, 12, PAL.dim, 'left', 800, true); face(st.main_runner, 0, 50, 414, 44); label(nameOf(st.main_runner), 102, 437, 18, '#fff', 'left', 900, true); }
+  if (st.main_runner) { label('MOST PLAYED ONLINE', 50, 404, 12, PAL.dim, 'left', 800, true); face(st.main_runner, 0, 50, 414, 44); label(nameOf(st.main_runner), 102, 437, 18, '#fff', 'left', 900, true); }
   // ---- rows
   const rows = { fav: `Favourite runner   ◀ ${nameOf(fav)} ▶`, name: 'Change name', sync: 'Save settings now', out: 'Sign out', back: 'Back' };
   ACCT_ROWS.forEach((r, i) => {
@@ -856,8 +858,8 @@ function drawAccount() {
   });
   // ---- recent matches
   panel(458, 60, 472, 226, PAL.turf);
-  label('RECENT MATCHES', 474, 80, 15, PAL.gold, 'left', 900, true);
-  if (!ACCT.recent.length) label('Play online or VS CPU while signed in and your results show up here.', 474, 110, 14, '#cfd3ea', 'left', 600);
+  label('RECENT ONLINE MATCHES', 474, 80, 15, PAL.gold, 'left', 900, true);
+  if (!ACCT.recent.length) label('Play online while signed in and your results show up here.', 474, 110, 14, '#cfd3ea', 'left', 600);
   ACCT.recent.slice(0, 7).forEach((m, i) => {
     const y = 96 + i * 27;
     rrect(474, y, 34, 22, 4, m.won ? PAL.turf : '#8a2a3c'); label(m.won ? 'WIN' : 'LOSS', 491, y + 11, 11, '#fff', 'center', 900, true);
