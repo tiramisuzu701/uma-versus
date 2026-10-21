@@ -32,5 +32,3 @@ The full guide to the systems, every move's frame data and every combo is in the
 - Fonts: Barlow Condensed and Dela Gothic One, SIL Open Font License 1.1 (see `vendor/fonts/`).
 - Netcode transport: PeerJS, MIT License (see `vendor/`).
 - Accounts: supabase-js, MIT License (see `vendor/`).
-- Sprites: TODO, credit the sprite artists here.
-- Music: TODO, credit the composers or sources here.
