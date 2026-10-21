@@ -1,0 +1,526 @@
+// ============================================================================
+//  INPUT, CPU, AUDIO, MENUS, LOOP
+// ============================================================================
+'use strict';
+
+// ------------------------------------------------------------------ keyboard / gamepad (remappable)
+const ACTIONS = [['u', 'Up / jump'], ['d', 'Down / crouch'], ['l', 'Left'], ['r', 'Right'], ['L', 'Light (L)'], ['M', 'Medium (M)'], ['H', 'Heavy (H)'],
+  ['S', 'Skill (S)'], ['THROW', 'Throw (L+M)'], ['SUPER', 'Super (S+H)'], ['TAUNT', 'Taunt (L+H)']];
+const DEFAULT_KEYS = [
+  { u: ['KeyW'], d: ['KeyS'], l: ['KeyA'], r: ['KeyD'], L: ['KeyF'], M: ['KeyG'], H: ['KeyH'], S: ['KeyT'], THROW: ['KeyR'], SUPER: ['KeyY'], TAUNT: ['KeyE'] },
+  { u: ['ArrowUp'], d: ['ArrowDown'], l: ['ArrowLeft'], r: ['ArrowRight'], L: ['KeyJ', 'Numpad1'], M: ['KeyK', 'Numpad2'], H: ['KeyL', 'Numpad3'], S: ['KeyI', 'Numpad5', 'Numpad0'], THROW: ['KeyU', 'Numpad4'], SUPER: ['KeyO', 'Numpad6'], TAUNT: ['KeyP', 'Numpad7'] },
+];
+// gamepad buttons (standard layout). Directions are always d-pad + left stick.
+const DEFAULT_PAD = { u: [12], d: [13], l: [14], r: [15], L: [2], M: [3], H: [1], S: [0], THROW: [4], SUPER: [5], TAUNT: [8] };
+let KEYMAP, PADMAP;
+function resetControls(save = true) {
+  KEYMAP = JSON.parse(JSON.stringify(DEFAULT_KEYS)); PADMAP = JSON.parse(JSON.stringify(DEFAULT_PAD));
+  if (save) saveControls();
+}
+function saveControls() { try { localStorage.setItem('umavs.controls', JSON.stringify({ v: 1, keys: KEYMAP, pad: PADMAP })); } catch (e) { } }
+(function loadControls() {
+  resetControls(false);
+  try {
+    const st = JSON.parse(localStorage.getItem('umavs.controls') || 'null');
+    if (st && st.v === 1) for (const [a] of ACTIONS) {
+      for (const i of [0, 1]) if (st.keys && st.keys[i] && Array.isArray(st.keys[i][a])) KEYMAP[i][a] = st.keys[i][a];
+      if (st.pad && Array.isArray(st.pad[a])) PADMAP[a] = st.pad[a];
+    }
+  } catch (e) { }
+})();
+const KEYNAMES = { Space: 'Space', Enter: 'Enter', Backspace: 'Bksp', Tab: 'Tab', ShiftLeft: 'L-Shift', ShiftRight: 'R-Shift', ControlLeft: 'L-Ctrl', ControlRight: 'R-Ctrl',
+  AltLeft: 'L-Alt', AltRight: 'R-Alt', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/',
+  BracketLeft: '[', BracketRight: ']', Backslash: '\\', Minus: '-', Equal: '=', Backquote: '`' };
+const keyName = c => KEYNAMES[c] || c.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'Num');
+const PADNAMES = ['A / ✕', 'B / ○', 'X / □', 'Y / △', 'LB', 'RB', 'LT', 'RT', 'Back', 'Start', 'L-Stick', 'R-Stick', 'D-Up', 'D-Down', 'D-Left', 'D-Right', 'Home'];
+
+const keys = new Set();
+const keyEdges = [];
+for (const ev of ['pointerdown', 'touchend', 'mousedown']) addEventListener(ev, () => { Sfx.unlock(); Music.unlock(); });
+addEventListener('keydown', e => {
+  Sfx.unlock(); Music.unlock();
+  if (UI.ctl && UI.ctl.wait && UI.ctl.wait.kind === 'key') {   // capturing a new binding
+    e.preventDefault();
+    if (e.code !== 'Escape') bindKey(UI.ctl.wait.player, UI.ctl.wait.action, e.code);
+    UI.ctl.wait = null; UI.ctl.cool = 12; return;
+  }
+  if (!keys.has(e.code)) keyEdges.push(e.code);
+  keys.add(e.code);
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Tab'].includes(e.code)) e.preventDefault();
+});
+addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('blur', () => keys.clear());
+function bindKey(player, action, code) {
+  for (const i of [0, 1]) for (const [a] of ACTIONS) KEYMAP[i][a] = KEYMAP[i][a].filter(c => c !== code);   // one key, one job
+  KEYMAP[player][action] = [code]; saveControls(); Sfx.play('ok');
+}
+function bindPad(action, btn) {
+  for (const [a] of ACTIONS) PADMAP[a] = PADMAP[a].filter(b => b !== btn);
+  PADMAP[action] = [btn]; saveControls(); Sfx.play('ok');
+}
+
+function kbInput(i, edges) {
+  const m = KEYMAP[i], o = {}, on = c => keys.has(c) || edges.includes(c);
+  for (const k of ['u', 'd', 'l', 'r', 'L', 'M', 'H', 'S']) o[k] = m[k].some(on) ? 1 : 0;
+  if (m.THROW.some(on)) o.L = o.M = 1;
+  if (m.SUPER.some(on)) o.S = o.H = 1;
+  if (m.TAUNT.some(on)) o.L = o.H = 1;
+  return o;
+}
+let padPrevStart = [false, false];
+// Some embeds (sandboxed iframes, previews) block the Gamepad API and throw a
+// SecurityError. Try once; if it's blocked, fall back to keyboard-only.
+let padsAllowed = !!navigator.getGamepads;
+function getPads() {
+  if (!padsAllowed) return [];
+  try { return [...navigator.getGamepads()].filter(Boolean); }
+  catch (e) { padsAllowed = false; console.warn('Gamepads unavailable here, keyboard only:', e.message); return []; }
+}
+function padInput(i) {
+  const pads = getPads();
+  const gp = pads[i]; const o = { ...NEUTRAL }; if (!gp) return { o, start: false };
+  const b = k => gp.buttons[k] && gp.buttons[k].pressed;
+  const on = a => PADMAP[a].some(b);
+  const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
+  o.l = on('l') || ax < -0.5 ? 1 : 0; o.r = on('r') || ax > 0.5 ? 1 : 0;
+  o.u = on('u') || ay < -0.5 ? 1 : 0; o.d = on('d') || ay > 0.5 ? 1 : 0;
+  for (const k of ['L', 'M', 'H', 'S']) o[k] = on(k) ? 1 : 0;
+  if (on('THROW')) o.L = o.M = 1;
+  if (on('SUPER')) o.S = o.H = 1;
+  if (on('TAUNT')) o.L = o.H = 1;
+  return { o, start: b(9) };
+}
+const orIn = (a, b) => { const o = {}; for (const k in NEUTRAL) o[k] = a[k] || b[k] ? 1 : 0; return o; };
+
+// ------------------------------------------------------------------ CPU
+
+// ------------------------------------------------------------------ audio (tiny synth)
+const Sfx = {
+  ac: null, vol: 0.5, muted: false,
+  unlock() { if (!this.ac) { try { this.ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { } } if (this.ac && this.ac.state === 'suspended') this.ac.resume(); },
+  noise(dur, f0, f1, gain, type = 'bandpass', delay = 0) {
+    const ac = this.ac, n = ac.createBufferSource(), len = Math.floor(ac.sampleRate * dur), t0 = ac.currentTime + delay;
+    const buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    n.buffer = buf; const f = ac.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(f0, t0);
+    f.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+    const g = ac.createGain(); g.gain.value = gain * this.vol; n.connect(f).connect(g).connect(ac.destination); n.start(t0);
+  },
+  tone(f0, f1, dur, gain, type = 'square', delay = 0) {
+    const ac = this.ac, o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + delay;
+    o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(gain * this.vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur);
+  },
+  play(name) {
+    if (!this.ac || this.muted) return;
+    switch (name) {
+      case 'hit': this.noise(0.08, 2400, 600, 0.6); this.tone(180, 60, 0.08, 0.3, 'sine'); break;
+      case 'heavy': this.noise(0.18, 1800, 200, 0.9); this.tone(120, 40, 0.2, 0.6, 'sine'); break;
+      case 'block': this.noise(0.05, 5000, 3000, 0.4, 'highpass'); this.tone(900, 700, 0.05, 0.15); break;
+      case 'armor': this.tone(500, 300, 0.15, 0.2, 'triangle'); this.noise(0.1, 3000, 1000, 0.4); break;
+      case 'whoosh': this.noise(0.15, 600, 2500, 0.35); break;
+      case 'wind': this.noise(0.3, 400, 3000, 0.35); break;
+      case 'thud': this.tone(90, 40, 0.15, 0.4, 'sine'); this.noise(0.1, 400, 100, 0.3, 'lowpass'); break;
+      case 'grab': this.tone(300, 200, 0.08, 0.2); break;
+      case 'power': [0, .08, .16].forEach((d, i) => this.tone(440 * (1 + i * .25), 660 * (1 + i * .25), 0.12, 0.15, 'square', d)); break;
+      case 'super': this.tone(200, 1600, 0.5, 0.2, 'sawtooth'); this.noise(0.5, 300, 4000, 0.3); break;
+      case 'ko': this.tone(300, 50, 0.8, 0.3, 'sawtooth'); this.noise(0.6, 2000, 100, 0.8); break;
+      case 'round': this.tone(660, 660, 0.12, 0.2); this.tone(880, 880, 0.2, 0.2, 'square', 0.13); break;
+      case 'go': this.tone(523, 1046, 0.35, 0.25); break;
+      case 'menu': case 'move': this.tone(1400, 1650, 0.03, 0.06, 'triangle'); break;
+      case 'ok': this.tone(880, 880, 0.05, 0.1); this.tone(1320, 1320, 0.09, 0.1, 'square', 0.05); break;
+      case 'back': this.tone(760, 420, 0.09, 0.09, 'triangle'); break;
+      case 'deny': this.tone(220, 180, 0.1, 0.12); this.tone(207, 170, 0.12, 0.12, 'square', 0.07); break;
+      case 'page': this.tone(1000, 1350, 0.05, 0.07, 'triangle'); this.noise(0.05, 4000, 2000, 0.12, 'highpass'); break;
+      case 'stamp': this.noise(0.08, 900, 200, 0.7, 'lowpass'); this.tone(170, 60, 0.14, 0.45, 'sine'); this.tone(1200, 900, 0.04, 0.06, 'square', 0.02); break;
+      case 'vs': this.noise(0.45, 300, 3200, 0.45); this.tone(110, 55, 0.6, 0.35, 'sawtooth', 0.12); this.noise(0.3, 2500, 400, 0.5, 'bandpass', 0.12); break;
+      case 'bell': [0, 0.28].forEach(d => { this.tone(1568, 1560, 0.5, 0.12, 'sine', d); this.tone(2352, 2340, 0.35, 0.06, 'sine', d); this.tone(3136, 3120, 0.2, 0.04, 'sine', d); }); break;
+      case 'ready': this.tone(520, 520, 0.06, 0.1, 'square'); break;
+      case 'gate': this.noise(0.25, 3200, 500, 0.8); this.tone(330, 290, 0.3, 0.25, 'square'); this.tone(165, 140, 0.4, 0.3, 'sawtooth'); this.noise(1.3, 700, 1100, 0.22, 'bandpass', 0.05); break;
+      case 'crowd': this.noise(1.6, 650, 950, 0.32, 'bandpass'); break;
+      case 'fanfare': [523, 659, 784, 1047].forEach((f, i) => this.tone(f, f, i === 3 ? 0.45 : 0.12, 0.13, 'square', i * 0.09)); this.tone(523, 523, 0.5, 0.08, 'triangle', 0.27); break;
+    }
+  },
+};
+
+// ------------------------------------------------------------------ menus
+const UI = { screen: 'title', modeIdx: 0, sel: [0, 1], selDone: [false, false], pauseIdx: 0, paused: false, movesChar: 0, t: 0, back: 'mode' };
+const MODES = [['VERSUS', 'versus', 'Two players, one keyboard or two gamepads'], ['ONLINE', 'online', 'Play a friend over the internet with a room code (rollback netcode)'], ['VS CPU', 'cpu', 'Fight the computer'], ['TRAINING', 'training', 'Hitboxes, frame advantage, dummy settings'], ['REPLAYS', 'replays', 'Watch your recent matches or load a replay file'], ['COMBO TRIALS', 'trials', 'Learn each runner\'s combos, with demos'], ['MOVE LIST', 'moves', 'Every move for every runner'], ['CONTROLS', 'controls', 'Keyboard and gamepad layout'], ['OPTIONS', 'sound', 'Volume, reduce flashes, fullscreen, and every music track']];
+const ROSTER = ['spe', 'suz', 'gs', 'vo', 'ds', 'mm', 'tt', 'kb'];
+let cpuLevel = 2;
+
+let prevMenu = [{ ...NEUTRAL }, { ...NEUTRAL }];
+function menuEdges(i, cur) {
+  const p = prevMenu[i], e = {};
+  for (const k in NEUTRAL) e[k] = cur[k] && !p[k];
+  prevMenu[i] = cur; return e;
+}
+
+function tick() {
+  UI.t++;
+  musicDirector();
+  netPump();
+  const pad = [padInput(0), padInput(1)];
+  const edges = keyEdges.splice(0);
+  const raw = [orIn(kbInput(0, edges), pad[0].o), orIn(kbInput(1, edges), pad[1].o)];
+  const startPressed = [0, 1].some(i => pad[i].start && !padPrevStart[i]);
+  padPrevStart = [pad[0].start, pad[1].start];
+  const esc = edges.includes('Escape') || startPressed;
+  const enter = edges.includes('Enter') || edges.includes('Space');
+  const me = [menuEdges(0, raw[0]), menuEdges(1, raw[1])];
+  const conf = i => me[i].L || me[i].S;
+  const back = i => me[i].H;
+  const anyConf = conf(0) || conf(1) || enter;
+
+  if (UI.screen === 'title') {
+    if (anyConf || esc) { UI.screen = 'mode'; Sfx.play('ok'); }
+    return;
+  }
+  if (UI.screen === 'mode') {
+    const up = me[0].u || me[1].u, dn = me[0].d || me[1].d;
+    if (up) { UI.modeIdx = (UI.modeIdx + MODES.length - 1) % MODES.length; Sfx.play('menu'); }
+    if (dn) { UI.modeIdx = (UI.modeIdx + 1) % MODES.length; Sfx.play('menu'); }
+    if (MODES[UI.modeIdx][1] === 'cpu' && (me[0].l || me[0].r || me[1].l || me[1].r)) { const r = me[0].r || me[1].r; cpuLevel = 1 + (cpuLevel - 1 + (r ? 1 : 3)) % 4; Sfx.play('menu'); }
+    if (anyConf) {
+      Sfx.play('ok');
+      const m = MODES[UI.modeIdx][1];
+      if (m === 'moves') { UI.screen = 'moves'; UI.back = 'mode'; }
+      else if (m === 'replays') { UI.screen = 'replays'; RM.idx = 0; }
+      else if (m === 'online') { UI.screen = 'online'; showNetPanel(); setStatus(Net.status || ''); }
+      else if (m === 'controls') { UI.screen = 'controls'; UI.back = 'mode'; }
+      else if (m === 'sound') { UI.screen = 'sound'; UI.soundIdx = 0; MD.jukebox = 'menu'; }
+      else if (m === 'trials') { UI.screen = 'trials'; }
+      else { UI.pendingMode = m; UI.screen = 'select'; UI.selDone = [false, false]; UI.sel = lastPicks(m); }
+    }
+    if (esc || back(0)) { UI.screen = 'title'; Sfx.play('back'); }
+    return;
+  }
+  if (UI.screen === 'online') {
+    netPanelPad(padEdges(pad));
+    if (esc) { netClose(false); hideNetPanel(); UI.screen = 'mode'; Sfx.play('back'); }
+    return;
+  }
+  if (UI.screen === 'replays') { replaysMenuTick(orEdges(me[0], me[1]), enter, esc, edges); return; }
+  if (UI.screen === 'replay') { replayTick(orEdges(me[0], me[1]), edges, esc); return; }
+  if (UI.screen === 'netselect') { netSelectTick(orEdges(me[0], me[1]), enter, esc); return; }
+  if (UI.screen === 'controls') { controlsTick(edges, esc, enter, orEdges(me[0], me[1])); return; }
+  if (UI.screen === 'moves') {
+    if (me[0].l || me[0].r || me[1].l || me[1].r) { UI.movesChar = (UI.movesChar + ((me[0].r || me[1].r) ? 1 : ROSTER.length - 1)) % ROSTER.length; Sfx.play('menu'); }
+    if (me[0].u || me[0].d || me[1].u || me[1].d) { UI.movesPage = UI.movesPage ? 0 : 1; Sfx.play('menu'); }
+    if (esc || back(0) || back(1) || anyConf) { UI.screen = UI.back; Sfx.play('back'); }
+    return;
+  }
+  if (UI.screen === 'select') {
+    const twoP = UI.pendingMode === 'versus';
+    for (let i = 0; i < 2; i++) {
+      // in 1P modes, P1 (or anyone) picks both sides in order
+      const ctrl = twoP ? i : (UI.selDone[0] ? 1 : 0);
+      const src = twoP ? me[i] : orEdges(me[0], me[1]);
+      if (!twoP && i === 1) break;
+      if (UI.selDone[ctrl]) { if (src.H) { UI.selDone[ctrl] = false; Sfx.play('back'); } continue; }
+      if (src.l || src.r) { const n = ROSTER.length + 1; UI.sel[ctrl] = (UI.sel[ctrl] + (src.r ? 1 : n - 1)) % n; Sfx.play('menu'); }
+      if (src.L || src.S || (enter && (twoP ? i === 0 : true))) {
+        rememberPick(ctrl, UI.sel[ctrl]);
+        if (UI.sel[ctrl] === ROSTER.length) { UI.sel[ctrl] = Math.floor(Math.random() * ROSTER.length); toast(`Random pick: ${nameOf(ROSTER[UI.sel[ctrl]])}`); }
+        UI.selDone[ctrl] = true; Sfx.play('stamp');
+      }
+      if (src.H && !twoP && ctrl === 1) { UI.selDone[0] = false; }
+    }
+    if (twoP && enter) { /* enter confirms P1 only, handled above */ }
+    if (esc) { UI.screen = 'mode'; Sfx.play('back'); return; }
+    if (UI.selDone[0] && UI.selDone[1]) { UI.screen = 'stage'; UI.stageIdx = UI.stageIdx ?? 0; UI.stageT = 0; Sfx.play('ok'); }
+    return;
+  }
+  if (UI.screen === 'stage') {
+    const e = orEdges(me[0], me[1]), n = STAGE_LIST.length + 1;
+    UI.stageT++;
+    if (e.l || e.r) { UI.stageIdx = (UI.stageIdx + (e.r ? 1 : n - 1)) % n; Sfx.play('menu'); }
+    if ((e.L || e.S || enter) && UI.stageT > 4) {
+      UI.vsStage = UI.stageIdx === STAGE_LIST.length ? Math.floor(Math.random() * STAGE_LIST.length) : UI.stageIdx;
+      Sfx.play('ok');
+      UI.screen = 'music'; UI.musicIdx = Math.max(0, THEME_IDS.indexOf(ROSTER[UI.sel[0]])); UI.musicT = 0;
+    }
+    if (esc || e.H) { UI.screen = 'select'; if (UI.pendingMode === 'versus') UI.selDone = [false, false]; else UI.selDone[1] = false; Sfx.play('back'); }
+    return;
+  }
+  if (UI.screen === 'music') {
+    const e = UI.pendingMode === 'versus' ? me[0] : orEdges(me[0], me[1]), n = THEME_IDS.length;   // P1 picks the battle theme
+    UI.musicT++;
+    if (e.l || e.r) { UI.musicIdx = (UI.musicIdx + (e.r ? 1 : n - 1)) % n; Sfx.play('menu'); }
+    if ((e.L || e.S || enter) && UI.musicT > 4) { Sfx.play('ok'); if (UI.pendingMode === 'training') beginLocalMatch(); else { UI.screen = 'vs'; UI.vsT = 0; Sfx.play('vs'); } }
+    if (esc || e.H) { UI.screen = 'stage'; UI.stageT = 0; Sfx.play('back'); }
+    return;
+  }
+  if (UI.screen === 'sound') {
+    const e = orEdges(me[0], me[1]), rows = SOUND_ROWS(), r = rows[UI.soundIdx];
+    if (e.u) { UI.soundIdx = (UI.soundIdx + rows.length - 1) % rows.length; Sfx.play('menu'); }
+    if (e.d) { UI.soundIdx = (UI.soundIdx + 1) % rows.length; Sfx.play('menu'); }
+    if ((e.l || e.r) && (r.k === 'music' || r.k === 'sfx')) {
+      const d = e.r ? 0.1 : -0.1;
+      if (r.k === 'music') Music.vol = Math.round(Math.max(0, Math.min(1, Music.vol + d)) * 10) / 10; else { Sfx.vol = Math.round(Math.max(0, Math.min(1, Sfx.vol + d)) * 10) / 10; Sfx.play('hit'); }
+      Music.save();
+    }
+    if ((e.l || e.r || e.L || e.S || enter) && r.k === 'calm') { SET.calm = !SET.calm; saveSet(); Sfx.play('menu'); }
+    if ((e.L || e.S || enter) && r.k === 'full') { toggleFullscreen(); Sfx.play('menu'); }
+    if (e.L || e.S || enter) {
+      if (r.k === 'track') { MD.jukebox = r.id; Music.play(r.id, 0.4, 0.5, true); Sfx.play('ok'); }
+      if (r.k === 'back') { UI.screen = 'mode'; Sfx.play('back'); }
+    }
+    if (esc || e.H) { UI.screen = 'mode'; Sfx.play('back'); }
+    return;
+  }
+  if (UI.screen === 'trials') {
+    const e = orEdges(me[0], me[1]), n = trialsFor(ROSTER[TM.char]).length;
+    if (e.l || e.r) { TM.char = (TM.char + (e.r ? 1 : ROSTER.length - 1)) % ROSTER.length; TM.idx = 0; Sfx.play('move'); }
+    if (e.u || e.d) { TM.idx = (TM.idx + (e.d ? 1 : n - 1)) % n; Sfx.play('move'); }
+    if (e.L || e.S || enter) {
+      Sfx.play('ok'); UI.pendingMode = 'training'; UI.sel = [TM.char, 0]; UI.vsStage = menuStage; UI.musicIdx = TM.char;
+      beginLocalMatch(); trialStart(ROSTER[TM.char], TM.idx);
+    }
+    if (esc || e.H) { UI.screen = 'mode'; Sfx.play('back'); }
+    return;
+  }
+  if (UI.screen === 'vs') {
+    UI.vsT++;
+    if (UI.vsT > 130 || (UI.vsT > 18 && (anyConf || esc))) beginLocalMatch();
+    return;
+  }
+  if (UI.screen === 'game' && G.mode === 'online') {
+    if (Net.menu) {
+      if (conf(0) || conf(1) || enter) { netSend({ t: 'bye' }); netClose(false); UI.screen = 'online'; showNetPanel(); setStatus('You left the match.'); return; }
+      if (esc || back(0) || back(1)) Net.menu = false;
+    } else if (esc) Net.menu = true;
+    if (netMatchConfirmedOver()) {   // results screen; keep resending inputs so the other side can finish too
+      if (!Net.recDone) { Net.recDone = true; recFinishOnline(); }
+      if (edges.includes('KeyD')) downloadReplay(lastReplay);
+      if (edges.includes('KeyR')) { netSend({ t: 'lobby', pick: Net.myPick, ready: false, start: null }); UI.screen = 'netselect'; playReplay(lastReplay); return; }
+      sendInputs(); G.phaseT++;
+      if (G.phaseT > 60 && (anyConf || esc)) { UI.screen = 'netselect'; Net.menu = false; }
+      return;
+    }
+    netGameTick(orIn(raw[0], raw[1]));
+    return;
+  }
+  if (UI.screen === 'game') {
+    if (UI.paused) { pauseMenu(me, esc, enter, conf, back); return; }
+    if (esc) { UI.paused = true; UI.pauseIdx = 0; Sfx.play('page'); return; }
+    if (G.mode === 'training') {
+      if (edges.includes('Digit1')) cycle('dummy'); if (edges.includes('Digit2')) cycle('block');
+      if (edges.includes('Digit3')) G.showBoxes = !G.showBoxes;
+      if (edges.includes('Digit4') || edges.includes('Backspace')) { if (TR.on) trialReset(); else resetTraining(); }
+      if (edges.includes('Digit5')) { TOOLS.inputs = !TOOLS.inputs; Sfx.play('move'); }
+      if (edges.includes('Digit6')) { TOOLS.meter = !TOOLS.meter; Sfx.play('move'); }
+      if (edges.includes('Digit7') && !TR.on) recToggle();
+      if (edges.includes('Digit8') && !TR.on) playToggle();
+      if (TR.on && edges.includes('Digit9')) { demoStart(); Sfx.play('ok'); }
+      if (TR.on && edges.includes('Digit0')) { trialStart(TR.cid, TR.idx + 1); Sfx.play('move'); }
+    }
+    if (edges.includes('Backquote')) G.showBoxes = !G.showBoxes;
+    if (G.phase === 'match') {
+      recFinish();
+      if (edges.includes('KeyD')) downloadReplay(lastReplay);
+      if (edges.includes('KeyR') && lastReplay) { playReplay(lastReplay); return; }
+      G.phaseT++;
+      if (G.phaseT > 60) {
+        const e = orEdges(me[0], me[1]);
+        if (e.u || e.d) { UI.resIdx = ((UI.resIdx || 0) + (e.d ? 1 : 2)) % 3; Sfx.play('menu'); }
+        if (anyConf) {
+          Sfx.play('ok'); const k = UI.resIdx || 0; UI.resIdx = 0;
+          if (k === 0) { beginLocalMatch(); return; }
+          if (k === 1) { UI.screen = 'select'; UI.selDone = [false, false]; }
+          if (k === 2) UI.screen = 'mode';
+        }
+        if (esc) { UI.screen = 'select'; UI.selDone = [false, false]; Sfx.play('back'); }
+      }
+      return;
+    }
+    const ins = gameInputs(raw);
+    recFrame(ins);
+    step(ins);
+    if (G.mode === 'training') { demoAfterStep(); trialTrack(); toolsAfterStep(); }
+  }
+}
+const PICK_KEY = 'umavs.picks';
+function lastPicks(mode) { try { const o = JSON.parse(localStorage.getItem(PICK_KEY) || '{}')[mode]; if (o && o.length === 2) return o.map(v => Math.min(ROSTER.length, Math.max(0, v | 0))); } catch (e) { } return [0, 1]; }
+function rememberPick(side, v) { try { const all = JSON.parse(localStorage.getItem(PICK_KEY) || '{}'), cur = all[UI.pendingMode] || [0, 1]; cur[side] = v; all[UI.pendingMode] = cur; localStorage.setItem(PICK_KEY, JSON.stringify(all)); } catch (e) { } }
+function beginLocalMatch() {
+  TR.on = false; TR.demo = null; TOOLS.recState = TOOLS.rec && TOOLS.rec.length ? 'ready' : 'off'; TOOLS.hist = [[], []]; TOOLS.fm = [[], []];
+  startMatch(UI.pendingMode, ROSTER[UI.sel[0]], ROSTER[UI.sel[1]]);
+  G.stage = UI.vsStage || 0; G.music = THEME_IDS[UI.musicIdx ?? 0] || ROSTER[UI.sel[0]];
+  if (UI.pendingMode !== 'training') recStart(UI.pendingMode, ROSTER[UI.sel[0]], ROSTER[UI.sel[1]]); else recStop();
+  G.cpuLevel = cpuLevel;
+  UI.screen = 'game'; UI.paused = false;
+}
+// gamepad-only edges (keyboard typing in the room code box must not drive the menu)
+let padPrevO = [{ ...NEUTRAL }, { ...NEUTRAL }];
+function padEdges(pad) {
+  const e = { ...NEUTRAL };
+  for (let i = 0; i < 2; i++) { const o = pad[i].o; for (const k in NEUTRAL) if (o[k] && !padPrevO[i][k]) e[k] = 1; padPrevO[i] = { ...o }; }
+  return e;
+}
+function orEdges(a, b) { const o = {}; for (const k in a) o[k] = a[k] || b[k]; return o; }
+
+function gameInputs(raw) {
+  const [a, b] = G.p;
+  if (G.mode === 'versus') return raw;
+  // 1-player modes: P1 can use either keyboard layout (WASD or arrows) and either gamepad
+  let p1 = orIn(raw[0], raw[1]);
+  if (G.mode === 'cpu') return [p1, cpuInput(b, G.cpuLevel)];
+  if (TR.demo) p1 = demoInput() || p1;
+  const rec = !TR.on && recInputs(p1); if (rec) return rec;
+  // training dummy
+  const t = G.training;
+  let d = { ...NEUTRAL };
+  if (t.dummy === 'crouch') d.d = 1;
+  else if (t.dummy === 'jump') d.u = 1;
+  else if (t.dummy === 'cpu') d = cpuInput(b, 2);
+  else if (t.dummy === 'player 2') return raw;
+  const threat = a.state === 'attack' || a.state === 'cine' || a.airborne || G.projs.some(q => q.owner === a.side);
+  if (t.block !== 'none' && t.dummy !== 'cpu' && b.state !== 'attack' && threat) {
+    const doBlock = t.block === 'all' || (t.block === 'random' && ((G.frameCount >> 4) * 2654435761 >>> 0) % 2 === 0);
+    if (doBlock) {
+      const back = a.x > b.x ? 'l' : 'r'; d[back] = 1; d.l = back === 'l' ? 1 : 0; d.r = back === 'r' ? 1 : 0;
+      const low = a.state === 'attack' && a.move.hits && a.move.hits.some(h => h.guard === 'low' && a.t <= h.f[1]);
+      const high = a.airborne || (a.state === 'attack' && a.move.hits && a.move.hits.some(h => h.guard === 'high'));
+      if (low) d.d = 1; else if (high) d.d = 0;
+      if (t.dummy === 'jump') d.u = 0;
+    }
+  }
+  return [p1, d];
+}
+const DUMMY = ['stand', 'crouch', 'jump', 'cpu', 'player 2'], GUARD = ['none', 'all', 'random'];
+function cycle(k) {
+  const list = k === 'dummy' ? DUMMY : GUARD;
+  G.training[k] = list[(list.indexOf(G.training[k]) + 1) % list.length]; Sfx.play('menu');
+  G.p[1].ai = null;
+}
+function resetTraining() { for (const p of G.p) { const m = p.meter; p.reset(); p.setState('idle'); p.meter = m; } G.projs = []; G.adv = null; G.cam = STAGE_W / 2; G.freeze = 0; G.flashOwner = null; G.slow = 0; }
+
+function pauseItems() {
+  const items = [['Resume', () => { UI.paused = false; }]];
+  if (TR.on) {
+    items.push(['Watch demo', () => { demoStart(); UI.paused = false; }]);
+    items.push(['Next trial', () => { trialStart(TR.cid, TR.idx + 1); UI.paused = false; }]);
+    items.push(['Previous trial', () => { trialStart(TR.cid, TR.idx - 1); UI.paused = false; }]);
+    items.push(['Reset positions', () => { trialReset(); UI.paused = false; }]);
+    items.push([`Input display: ${TOOLS.inputs ? 'on' : 'off'}`, () => { TOOLS.inputs = !TOOLS.inputs; }]);
+    items.push(['Trial list', () => { recStop(); TR.on = false; UI.screen = 'trials'; TM.idx = TR.idx; UI.paused = false; }]);
+  } else if (G.mode === 'training') {
+    items.push([`Dummy: ${G.training.dummy}`, () => cycle('dummy')]);
+    items.push([`Dummy guard: ${G.training.block}`, () => cycle('block')]);
+    items.push([`Hitboxes: ${G.showBoxes ? 'on' : 'off'}`, () => { G.showBoxes = !G.showBoxes; }]);
+    items.push(['Reset positions', () => { resetTraining(); UI.paused = false; }]);
+    items.push([`Input display: ${TOOLS.inputs ? 'on' : 'off'}`, () => { TOOLS.inputs = !TOOLS.inputs; }]);
+    items.push([`Frame meter: ${TOOLS.meter ? 'on' : 'off'}`, () => { TOOLS.meter = !TOOLS.meter; }]);
+    items.push([TOOLS.recState === 'recording' ? 'Stop recording' : 'Record dummy', () => { recToggle(); UI.paused = false; }]);
+    items.push([TOOLS.recState === 'playing' ? 'Stop playback' : 'Play recording', () => { playToggle(); UI.paused = false; }]);
+  } else items.push([`Hitboxes: ${G.showBoxes ? 'on' : 'off'}`, () => { G.showBoxes = !G.showBoxes; }]);
+  items.push([`Music: ${Math.round(Music.vol * 100)}%`, () => { Music.vol = Music.vol >= 1 ? 0 : Math.round((Music.vol + 0.25) * 4) / 4; Music.save(); }]);
+  items.push([`Effects: ${Sfx.muted ? 'off' : 'on'}`, () => { Sfx.muted = !Sfx.muted; }]);
+  items.push([`Reduce flashes: ${SET.calm ? 'on' : 'off'}`, () => { SET.calm = !SET.calm; saveSet(); }]);
+  items.push(['Fullscreen', () => toggleFullscreen()]);
+  items.push(['Move list', () => { UI.screen = 'moves'; UI.back = 'game'; UI.movesChar = ROSTER.indexOf(G.p[0].cid); UI.movesPage = 0; }]);
+  items.push(['Controls', () => { UI.screen = 'controls'; UI.back = 'game'; UI.ctl = null; }]);
+  items.push(['Character select', () => { recStop(); UI.screen = 'select'; UI.selDone = [false, false]; UI.paused = false; }]);
+  items.push(['Main menu', () => { recStop(); UI.screen = 'mode'; UI.paused = false; }]);
+  return items;
+}
+function pauseMenu(me, esc, enter, conf, back) {
+  const items = pauseItems();
+  if (me[0].u || me[1].u) { UI.pauseIdx = (UI.pauseIdx + items.length - 1) % items.length; Sfx.play('menu'); }
+  if (me[0].d || me[1].d) { UI.pauseIdx = (UI.pauseIdx + 1) % items.length; Sfx.play('menu'); }
+  if (conf(0) || conf(1) || enter) { items[UI.pauseIdx][1](); Sfx.play('ok'); }
+  if (esc || back(0)) { UI.paused = false; Sfx.play('back'); }
+}
+
+// ------------------------------------------------------------------ menu drawing
+// combo notation -> readable: 236M -> ↓↘→M, jc -> jump cancel, dc -> dash cancel
+// ------------------------------------------------------------------ control mapping
+const CTL_COLS = ['P1 KEY', 'P2 KEY', 'GAMEPAD'];
+function controlsRows() { return [...ACTIONS.map(([a, label]) => ({ a, label })), { label: 'Reset to defaults', act: 'reset' }, { label: 'Back', act: 'back' }]; }
+let padPrevBtns = [];
+function controlsTick(edges, esc, enter, e) {
+  const C = UI.ctl || (UI.ctl = { row: 0, col: 0, wait: null, cool: 0 });
+  const rows = controlsRows();
+  if (C.wait && C.wait.kind === 'pad') {   // waiting for a gamepad button
+    const pads = getPads(); let pressed = -1;
+    for (const gp of pads) gp.buttons.forEach((bt, i) => { if (bt.pressed && !padPrevBtns.includes(i) && pressed < 0) pressed = i; });
+    padPrevBtns = []; for (const gp of pads) gp.buttons.forEach((bt, i) => bt.pressed && padPrevBtns.push(i));
+    if (esc) C.wait = null;
+    else if (pressed >= 0 && pressed !== 9) { bindPad(C.wait.action, pressed); C.wait = null; C.cool = 12; }
+    return;
+  }
+  if (C.wait) return;                       // keyboard capture happens in the keydown handler
+  if (C.cool > 0) { C.cool--; return; }
+  const has = k => edges.includes(k);
+  if (has('ArrowUp') || has('KeyW') || e.u) { C.row = (C.row + rows.length - 1) % rows.length; Sfx.play('menu'); }
+  if (has('ArrowDown') || has('KeyS') || e.d) { C.row = (C.row + 1) % rows.length; Sfx.play('menu'); }
+  if (has('ArrowLeft') || has('KeyA') || e.l) { C.col = (C.col + 2) % 3; Sfx.play('menu'); }
+  if (has('ArrowRight') || has('KeyD') || e.r) { C.col = (C.col + 1) % 3; Sfx.play('menu'); }
+  if (esc) { UI.screen = UI.back; UI.ctl = null; Sfx.play('back'); return; }
+  if (enter || has('KeyF') || e.L || e.S) {
+    const r = rows[C.row];
+    if (r.act === 'reset') { resetControls(); Sfx.play('ok'); toast('Controls reset to defaults'); }
+    else if (r.act === 'back') { UI.screen = UI.back; UI.ctl = null; }
+    else {
+      C.wait = C.col < 2 ? { kind: 'key', player: C.col, action: r.a } : { kind: 'pad', action: r.a };
+      padPrevBtns = []; for (const gp of getPads()) gp.buttons.forEach((bt, i) => bt.pressed && padPrevBtns.push(i));
+      Sfx.play('ok');
+    }
+  }
+}
+
+function render() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  try { renderScreen(); } finally {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (toastT > 0) { toastT--; ctx.globalAlpha = Math.min(1, toastT / 20); slant(W / 2 - 270, HGT - 94, 540, 34, 10, 'rgba(12,17,38,.95)'); ctx.fillStyle = PAL.gold; ctx.fillRect(W / 2 - 262, HGT - 94, 524, 2); label(toastMsg, W / 2 + 5, HGT - 76, 16, '#fff', 'center', 700); ctx.globalAlpha = 1; }
+  }
+}
+function renderScreen() {
+  switch (UI.screen) {
+    case 'title': drawTitle(); break;
+    case 'mode': drawMode(); break;
+    case 'select': drawSelect(); break;
+    case 'stage': drawStageSelect(); break;
+    case 'music': drawMusicSelect(); break;
+    case 'sound': drawSound(); break;
+    case 'trials': drawTrialsMenu(); break;
+    case 'vs': drawVS(); break;
+    case 'moves': drawMoves(); break;
+    case 'controls': drawControls(); break;
+    case 'game': renderGame(); if (UI.paused) drawPause(); if (G.mode === 'online') drawNetHUD(); break;
+    case 'online': drawOnlineBg(); break;
+    case 'netselect': drawNetSelect(); break;
+    case 'replays': drawReplaysMenu(); break;
+    case 'replay': renderGame(); drawReplayHUD(); break;
+  }
+}
+
+// ------------------------------------------------------------------ loop
+let acc = 0, last = performance.now();
+function loop(now) {
+  acc += Math.min(250, now - last); last = now;
+  const dt = 1000 / 60;
+  while (acc >= dt) { tick(); acc -= dt; }
+  render();
+  requestAnimationFrame(loop);
+}
+function fit() {
+  const s = Math.min(innerWidth / W, innerHeight / HGT);
+  cv.style.width = Math.floor(W * s) + 'px'; cv.style.height = Math.floor(HGT * s) + 'px';
+}
+addEventListener('resize', fit);
+const fontsReady = document.fonts ? Promise.all(['600 16px "Barlow Condensed"', 'italic 800 16px "Barlow Condensed"', 'italic 900 16px "Barlow Condensed"']
+  .map(f => document.fonts.load(f).catch(() => null))) : Promise.resolve();
+Music.load();
+fontsReady.then(() => loadAssets()).then(() => { ledCache.clear(); initNetPanel(); fit(); requestAnimationFrame(loop); });
+
+// ------------------------------------------------------------------ fullscreen
+function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen).call(document.documentElement);
+  } catch (e) { toast('Fullscreen is not available here'); }
+}
