@@ -60,7 +60,7 @@ async def main():
         await pg.evaluate("() => { tick = () => {}; render = () => {}; }")
         data = await pg.evaluate(JS)
         open(ROOT+'/build/wiki/wiki_data.json','w').write(data)
-        await pg.evaluate(open(ROOT+'/tools/test_all.py').read().split('LIB = r"""')[1].split('"""')[0] + "\n;0")
+        await pg.evaluate(open(ROOT+'/tools/test_combos.py').read().split('LIB = r"""')[1].split('"""')[0] + "\n;0")
         combos = await pg.evaluate("() => { const o = {}; for (const cid of ROSTER) o[cid] = trialsFor(cid).map(cb => ({ ...cb, ...T.runCombo(cid, cb.seq, 'spe', cb.corner ? 1650 : undefined) })); return JSON.stringify(o); }")
         open(ROOT+'/build/wiki/wiki_combos.json','w').write(combos)
         print('ERR', errs); await b.close()

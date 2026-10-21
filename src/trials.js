@@ -1,8 +1,5 @@
-// ============================================================================
-//  TRAINING TOOLS  —  combo trials (with a demo that performs the combo),
-//  input display, frame meter, dummy record & playback.
-//  None of this runs online; the demo and recorder only feed inputs.
-// ============================================================================
+// Training tools: combo trials (with demos), input display, frame meter and
+// dummy recording. None of it runs online.
 'use strict';
 
 // advanced routes on top of each runner's listed starter combos ("," = link: wait until you recover)

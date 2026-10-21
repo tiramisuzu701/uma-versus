@@ -1,10 +1,6 @@
-// ============================================================================
-//  CPU  —  runs outside the simulation and only produces inputs.
-//  It perceives the opponent with a human-like reaction delay, blocks by
-//  reading what it has seen, hit-confirms real combos from the trial lists,
-//  punishes unsafe moves, anti-airs, and only uses supers to finish a
-//  grounded combo or (sometimes) as a reversal that isn't frame-perfect.
-// ============================================================================
+// CPU opponent. Runs outside the sim and only produces inputs: it sees the
+// opponent with a reaction delay, guesses when blocking, and confirms combos
+// from the trial lists.
 'use strict';
 
 const CPU_NAMES = ['', 'ROOKIE', 'NORMAL', 'HARD', 'G1'];
@@ -187,7 +183,7 @@ function cpuInput(me, level) {
     if (ai.punishKey !== key) {
       ai.punishKey = key;
       if (rnd() < lv.punish) {
-        if (me.meter >= 100 && dist < (me.c.moves.SU && !me.c.moves.SU.cine ? 750 : 320) && me.frame - (ai.stunEnd || -99) >= 4 + lv.slop * 2 && rnd() < lv.super * 0.35) { out.S = out.H = 1; return out; }   // invincible super as a punish (never straight out of stun)
+        if (me.meter >= 100 && dist < (me.c.moves.SU && !me.c.moves.SU.cine ? 750 : 320) && me.frame - (ai.stunEnd || -99) >= 4 + lv.slop * 2 && rnd() < lv.super * 0.35) { out.S = out.H = 1; return out; }
         if (lv.combo > 0 && aiTryCombo(me, o, lv, dist)) return aiRunInput(me, o, lv) || out;
         if (dist < 160) { tap(dist < 105 ? 'L' : 'M'); return out; }
       }

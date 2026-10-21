@@ -1,11 +1,9 @@
-// ============================================================================
-//  RENDERING
-// ============================================================================
+// Drawing: fighters, effects, projectiles and the game frame.
 'use strict';
 const cv = document.getElementById('c');
 const ctx = cv.getContext('2d');
 ctx.imageSmoothingEnabled = false;
-// the canvas is drawn at the screen's real resolution: game coordinates stay 960x540, RES scales them up
+// game coords are always 960x540; RES scales them to the canvas
 let RES = 1;
 function baseT(dx = 0, dy = 0) { ctx.setTransform(RES, 0, 0, RES, dx * RES, dy * RES); }
 const SPR = {};

@@ -1,9 +1,5 @@
-// ============================================================================
-//  Accounts (Update 1.8): optional sign-in with email + password, a public
-//  profile (name + favourite runner), cloud save of settings, and a match
-//  history of online matches (VS CPU is never recorded, so it can't pad stats). Guests can do everything else.
-//  Nothing here touches the simulation.
-// ============================================================================
+// Optional accounts (Supabase): sign-in, profile, cloud save of settings and
+// online match history. Doesn't touch the sim.
 'use strict';
 
 const SYNC_KEYS = ['umavs.controls', 'umavs.audio', 'umavs.settings', 'umavs.trials', 'umavs.picks'];
@@ -21,8 +17,8 @@ function acctErr(e) {
   const m = (e && (e.message || e.error_description)) || String(e);
   if (/fetch|network|Failed/i.test(m)) return "Couldn't reach the account server. Check your connection.";
   if (/Invalid login/i.test(m)) return 'Wrong email or password.';
-  if (/Email not confirmed/i.test(m)) return 'Confirm your email first (check your inbox), then sign in.';
-  if (/already registered/i.test(m)) return 'There is already an account with that email. Sign in instead.';
+  if (/Email not confirmed/i.test(m)) return 'Confirm your email first, then sign in.';
+  if (/already registered/i.test(m)) return 'That email already has an account. Try signing in.';
   if (/Password should be/i.test(m)) return 'Password must be at least 6 characters.';
   if (/profiles_name_unique|duplicate key/i.test(m)) return 'That name is taken.';
   if (/name_format/i.test(m)) return 'Names are 3–16 letters, numbers, spaces, _ . or -';
@@ -61,14 +57,14 @@ async function acctSignUp(email, pass, name, fav) {
     if (!free) { acctSay('That name is taken.', false); Sfx.play('deny'); return false; }
     const opts = { data: { name, fav_runner: fav } }; if (location.protocol.startsWith('http')) opts.emailRedirectTo = location.origin + location.pathname;
     const { data, error } = await ACCT.client.auth.signUp({ email: email.trim(), password: pass, options: opts }); if (error) throw error;
-    if (!data.session) { acctSay('Almost there: open the link we emailed you, then sign in here.'); Sfx.play('ok'); return 'confirm'; }
+    if (!data.session) { acctSay('Check your email for a confirmation link, then sign in.'); Sfx.play('ok'); return 'confirm'; }
     acctSay('Account created. Welcome, ' + name + '!'); Sfx.play('fanfare'); return true;
   } catch (e) { acctSay(acctErr(e), false); Sfx.play('deny'); return false; } finally { ACCT.busy = false; }
 }
 async function acctSignOut() {
   if (!ACCT.on) return; await acctPush(true);
   try { await ACCT.client.auth.signOut(); } catch (e) { }
-  ACCT.user = null; ACCT.profile = null; ACCT.stats = null; ACCT.recent = []; acctSay('Signed out. You are playing as a guest.'); Sfx.play('back');
+  ACCT.user = null; ACCT.profile = null; ACCT.stats = null; ACCT.recent = []; acctSay('Signed out.'); Sfx.play('back');
 }
 async function acctReset(email) {
   if (!ACCT.on || !email.trim()) { acctSay('Type your email first.', false); return; }
@@ -130,7 +126,7 @@ async function acctPush(force) {
 
 // ------------------------------------------------------------------ match history
 function acctWho() { return acctOn() && ACCT.profile ? { id: ACCT.user.id, name: ACCT.profile.name, fav: ACCT.profile.fav_runner } : null; }
-async function acctRecord() {   // online matches only
+async function acctRecord() {
   const side = Net.side, me = G.p[side], them = G.p[1 - side], who = Net.theirWho;
   const row = { user_id: ACCT.user.id, mode: 'online', build: BUILD, my_runner: me.cid, opp_runner: them.cid,
     match_key: Net.matchKey || ('m' + Date.now()),
@@ -138,14 +134,14 @@ async function acctRecord() {   // online matches only
     won: me.wins > them.wins, rounds_won: Math.min(3, me.wins), rounds_lost: Math.min(3, them.wins), stage: G.stage || 0 };
   try {
     let { error } = await ACCT.client.from('match_results').insert(row);
-    if (error && row.opp_id && !/duplicate/i.test(error.message)) { row.opp_id = null; ({ error } = await ACCT.client.from('match_results').insert(row)); }   // unknown opponent id: keep the result anyway
+    if (error && row.opp_id && !/duplicate/i.test(error.message)) { row.opp_id = null; ({ error } = await ACCT.client.from('match_results').insert(row)); }   // bad opp id, save without it
     if (error && !/duplicate/i.test(error.message)) throw error; acctRefresh(); }
   catch (e) { /* history is best-effort: never interrupt play */ }
 }
 function acctTick() {
   if (!acctOn()) return;
   if (G.phase === 'match' && G.mode === 'online' && G.p.length && ACCT.recFor !== G.p[0]) { ACCT.recFor = G.p[0]; acctRecord(); }
-  if (ACCT.pullDone && ++ACCT.pushT % 600 === 0) acctPush(false);   // cloud save every 10 seconds if anything changed
+  if (ACCT.pullDone && ++ACCT.pushT % 600 === 0) acctPush(false);   // every 10s if something changed
 }
 
 // ------------------------------------------------------------------ the sign-in panel (DOM, for typing)

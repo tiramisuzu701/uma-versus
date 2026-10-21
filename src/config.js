@@ -1,8 +1,6 @@
-// ============================================================================
-//  Online services. The anon key is public by design: every table is guarded
-//  by row-level security in supabase/001_accounts.sql. Leave url empty to ship
-//  a build without accounts (everything else still works).
-// ============================================================================
+// Supabase project. The anon key is meant to be public; the tables are locked
+// down with row-level security (see supabase/). Leave url empty to build
+// without accounts.
 'use strict';
 const ACCT_CFG = {
   url: 'https://nyjpzwbbwgycxmnlswze.supabase.co',

@@ -1,14 +1,9 @@
-// ============================================================================
-//  MUSIC  —  streamed <audio> tracks with frame-driven fades.
-//  Cosmetic only (never read by the simulation). The director looks at the
-//  current screen / match state every tick and decides what should be playing:
-//    menus .......... Menu Theme (loops; it fades in and out by itself)
-//    round 1 start .. the chosen character theme fades in from the top
-//    rounds 1 → 2 ... keeps playing
-//    tie after R2 ... character theme fades out during the KO
-//    final round .... Third Round Theme fades in with the countdown
-//    match end ...... fades out under the results board
-// ============================================================================
+// Music. <audio> tracks with frame-timed fades, picked by musicDirector():
+//   menus        menu theme (loops)
+//   round 1      character theme fades in
+//   tied after 2 theme fades out during the KO
+//   round 3      third round theme fades in with the countdown
+//   match end    fade out
 'use strict';
 
 const THEME_IDS = ['spe', 'suz', 'gs', 'vo', 'ds', 'mm', 'tt', 'kb'];

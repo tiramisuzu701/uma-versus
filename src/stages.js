@@ -1,8 +1,5 @@
-// ============================================================================
-//  STAGES  —  procedural pixel art at 1/3 resolution, three parallax layers
-//  (far 0.35, mid 0.65, near 1.0) plus animated back/front passes.
-//  Purely cosmetic: nothing here is read by the simulation.
-// ============================================================================
+// Stages. Pixel art drawn in code at 1/3 resolution, three parallax layers
+// (0.35 / 0.65 / 1.0) plus animated back and front passes. Cosmetic only.
 'use strict';
 
 const PX = 3;                                   // art is drawn at 1/3 res and scaled up
@@ -334,10 +331,15 @@ function stageIndex() { return UI.screen === 'game' || UI.screen === 'replay' ? 
 function drawStage(cam, idx = stageIndex()) {
   const S = STAGES[idx] || STAGES[0], left = cam - W / 2;
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(S.far, Math.round(-left * 0.35), 0, S.far.width * PX, HGT);
-  ctx.drawImage(S.mid, Math.round(-left * 0.65), 0, S.mid.width * PX, HGT);
+  layer(S.far, Math.round(-left * 0.35));
+  layer(S.mid, Math.round(-left * 0.65));
   if (S.back) S.back(ctx, left, UI.t);
-  ctx.drawImage(S.near, Math.round(-left), 0, S.near.width * PX, HGT);
+  layer(S.near, Math.round(-left));
+}
+// only copy the part of a layer that's on screen (the layers are much wider than the view)
+function layer(img, dx) {
+  const sx = Math.max(0, Math.floor(-dx / PX)), sw = Math.min(img.width - sx, Math.ceil(W / PX) + 2);
+  if (sw > 0) ctx.drawImage(img, sx, 0, sw, img.height, dx + sx * PX, 0, sw * PX, img.height * PX);
 }
 function drawStageFront(cam, idx = stageIndex()) {
   const S = STAGES[idx] || STAGES[0];

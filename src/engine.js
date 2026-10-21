@@ -1,16 +1,13 @@
-// ============================================================================
-//  ENGINE  —  deterministic fixed-step simulation (60 fps).
-//  Everything in step() depends only on game state + per-frame inputs, so this
-//  can later be dropped behind rollback netcode without restructuring.
-// ============================================================================
+// Simulation. Fixed 60 fps step; step() only reads game state and that
+// frame's inputs, which is what makes replays and rollback work.
 'use strict';
 
 const W = 960, HGT = 540, GY = 470, STAGE_W = 1920, SC = 3;
-const BUF = 9;            // input buffer window (frames) — generous so combos are easy to perform
-const JUG_MAX = 10;       // juggle points: each air hit costs 1 (normals) or 2 (skills); at the cap the opponent can't be hit in the air
-const COMBO_HITS = 32;    // hard combo limit: after this many hits (or COMBO_TIME frames) further hits pass through
+const BUF = 9;            // input buffer (frames)
+const JUG_MAX = 10;       // juggle points: normals cost 1, skills 2
+const COMBO_HITS = 32;    // combo limit (hits), see also COMBO_TIME
 const COMBO_TIME = 420;
-const DECAY_AT = 120;     // after 2 seconds of combo, hitstun shrinks and juggled opponents fall faster
+const DECAY_AT = 120;     // hitstun decay starts after this many frames of combo
 const ROUND_TIME = 99;
 
 let rs = 1;
@@ -140,7 +137,7 @@ function invulnerable(p, fromAir) {
     if (fromAir && m.aaInv && p.t >= m.aaInv[0] && p.t <= m.aaInv[1]) return true;
   }
   if (p.state === 'backdash' && p.t <= ((p.c.backdash && p.c.backdash.inv) || 4)) return true;
-  if (p.state === 'cine' || p.state === 'throwing') return true;   // nothing interrupts a super cinematic or a throw in progress
+  if (p.state === 'cine' || p.state === 'throwing') return true;
   if (p.state === 'airHit' && p.jug >= JUG_MAX) return true;
   return false;
 }
@@ -406,7 +403,7 @@ function updateFighter(p) {
       }
       break;
     case 'air':
-      // pixie mobility: one double jump OR one air dash per jump
+      // double jump / air dash, once per jump
       if (p.airAct > 0 && p.t > 3) {
         if (c.doubleJump && p.inp.u && !p.prev.u) {
           const fx = (p.inp.r ? 1 : 0) - (p.inp.l ? 1 : 0);
@@ -452,8 +449,7 @@ function updateFighter(p) {
         p.vx = v[2] * p.facing; if (v[3] !== undefined) { p.vy = v[3]; vySet = true; } moved = true;
       }
       if (!moved && !m.air) p.vx *= 0.75;
-      // grounded moves never keep upward speed from a move they cancelled (e.g. a Dropkick cancelled into a super):
-      // in the air they fall back down, on the floor they stay on it
+      // don't keep upward speed from a cancelled move (Dropkick into super used to fly off screen)
       if (!m.air && !vySet) { if (p.y < GY) p.vy += c.grav; else p.vy = 0; }
       if (m.air && !moved) p.vy += c.grav;
       if (m.ev && m.ev[p.t]) doEvent(p, m.ev[p.t]);
@@ -523,7 +519,7 @@ function updateFighter(p) {
       break;
     }
     case 'thrown':
-      if (o.state !== 'throwing') { p.setState('airHit'); p.kd = true; p.vy = -4; p.vx = 0; p.y = Math.min(p.y, GY - 1); break; }   // safety: released if the throw is cut short
+      if (o.state !== 'throwing') { p.setState('airHit'); p.kd = true; p.vy = -4; p.vx = 0; p.y = Math.min(p.y, GY - 1); break; }   // throw got interrupted
       p.x = o.x + o.facing * 62;
       if (p.t <= 10 && !o.noTech && p.takeBoth('L', 'M')) { // tech!
         p.setState('tech'); o.setState('tech');
@@ -537,7 +533,7 @@ function updateFighter(p) {
     case 'cine': if (p.y < GY) p.vy += c.grav; else p.vy = 0; updateCine(p); break;
     case 'cineHit':
       p.vx = 0; p.vy = 0; if (p.y < GY) p.y = Math.min(GY, p.y + Math.max(4, (GY - p.y) * 0.3));   // a juggled opponent is pulled down into the cinematic
-      if (o.state !== 'cine') { p.setState('airHit'); p.kd = true; p.vy = -4; p.vx = 0; p.y = Math.min(p.y, GY - 1); }   // safety: never left frozen if the cinematic ends early
+      if (o.state !== 'cine') { p.setState('airHit'); p.kd = true; p.vy = -4; p.vx = 0; p.y = Math.min(p.y, GY - 1); }   // cinematic ended early
       break;
   }
 
@@ -647,7 +643,7 @@ function isHoldingBack(d, fromX) {
   return fromX > d.x ? d.inp.l : fromX < d.x ? d.inp.r : (d.facing === 1 ? d.inp.l : d.inp.r);
 }
 function canBlock(d) {
-  // dashes can be blocked out of instantly: holding back cancels the dash (UNI-style)
+  // holding back cancels a dash (UNI-style)
   return ['idle', 'walk', 'crouch', 'block', 'land0', 'dash'].includes(d.state) || (d.state === 'land' && d.t > 1);
 }
 
@@ -719,7 +715,7 @@ function resolveHit(a, d, h, srcX, fromAir, proj) {
   if (punish) addText('PUNISH!', d.x, GY - 200, a.c.look.fxColor, 24, 38);
   else if (counter) addText('COUNTER', d.x, GY - 200, '#ff5a5a', 22, 35);
 
-  if (h.cine && !proj) { // start the super cinematic: landing the first hit guarantees the whole super, grounded or juggled
+  if (h.cine && !proj) { // super cinematic
     a.setState('cine'); a.cs = 0; d.setState('cineHit'); d.x = Math.max(40, Math.min(STAGE_W - 40, a.x + a.facing * 70));
     spark(d.x, GY - 90, 'super', 2, a.facing); G.freeze = 12; Sfx.play('heavy');
     a.connected = true; return 'hit';
@@ -731,7 +727,7 @@ function resolveHit(a, d, h, srcX, fromAir, proj) {
     d.setState('airHit'); d.kd = !!h.kd; d.hardKd = !!h.hard;
     d.vx = dirSign * L[0]; d.vy = L[1] * (d.airborne ? Math.max(0.55, 1 - d.jug * 0.08) : 1);
     if (d.hp <= 0) { d.vy = Math.min(d.vy, -9); d.vx = dirSign * 5; }
-    d.y = Math.min(d.y, GY - 1); d.jug += proj && proj.sup ? 0 : proj || (a.state === 'attack' && a.move.kind !== 'normal') ? 2 : 1;   // super shots don't use up juggle points
+    d.y = Math.min(d.y, GY - 1); d.jug += proj && proj.sup ? 0 : proj || (a.state === 'attack' && a.move.kind !== 'normal') ? 2 : 1;
   } else {
     d.setState('hit'); d.hs = hs; d.crouchHit = !!crouching && h.guard !== 'high';
     d.vx = dirSign * h.push * 0.75;
@@ -782,7 +778,7 @@ function updateProjs() {
   for (let i = 0; i < G.projs.length; i++) for (let j = i + 1; j < G.projs.length; j++) {
     const A = G.projs[i], B = G.projs[j];
     if (A.owner !== B.owner && !A.dead && !B.dead && overlap(projRect(A), projRect(B))) {
-      if (A.sup !== B.sup) (A.sup ? B : A).dead = true; else A.dead = B.dead = true;   // super shots plough through normal ones
+      if (A.sup !== B.sup) (A.sup ? B : A).dead = true; else A.dead = B.dead = true;   // super shots win clashes
       spark((A.x + B.x) / 2, (A.y + B.y) / 2, 'block', 2, 0); Sfx.play('block');
     }
   }

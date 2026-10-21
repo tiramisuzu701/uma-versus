@@ -1,16 +1,10 @@
-// ============================================================================
-//  ONLINE  —  peer-to-peer rollback netcode
+// Rollback netcode over PeerJS (WebRTC).
 //
-//  How it works:
-//   * Each side sends only its inputs (one byte per frame), with redundancy,
-//     over a WebRTC data channel (PeerJS handles the room-code signalling).
-//   * When the opponent's input for a frame hasn't arrived yet, we predict it
-//     (= their last known input) and keep playing.
-//   * When the real input arrives and differs, we restore the snapshot from
-//     that frame and silently re-simulate up to the present ("rollback").
-//   * A checksum of confirmed frames is exchanged every 30 frames to detect
-//     desyncs while playtesting.
-// ============================================================================
+// Each side only sends inputs, one byte per frame, with some redundancy. If the
+// other side's input for a frame hasn't arrived we assume it's the same as their
+// last one and keep going. When the real input shows up and doesn't match, we
+// restore the snapshot from that frame and re-simulate to the present.
+// Checksums of confirmed frames are compared every 30 frames to catch desyncs.
 'use strict';
 
 const NET_PREFIX = 'umavs-proto-';
@@ -105,7 +99,7 @@ function netHost(local) {
   if (local) {
     Net.transport = 'bc'; Net.bc = new BroadcastChannel('umavs-local');
     Net.bc.onmessage = e => { if (e.data.from !== Net.role) netRecv(e.data); };
-    Net.code = 'LOCAL'; setStatus('Hosting on this computer. In another tab: Online → Same computer → Join.');
+    Net.code = 'LOCAL'; setStatus('Hosting on this computer. In another tab, tick Same computer and press Join.');
     return;
   }
   if (typeof Peer === 'undefined') { setStatus('PeerJS failed to load.'); return; }
@@ -115,7 +109,7 @@ function netHost(local) {
     setStatus('Creating room…');
     const peer = new Peer(NET_PREFIX + Net.code, { debug: 1 });
     Net.peer = peer;
-    peer.on('open', () => { setStatus(`Room code: ${Net.code}  — send it to your friend. Waiting…`); showCode(Net.code); });
+    peer.on('open', () => { setStatus(`Room code: ${Net.code}. Send it to your friend.`); showCode(Net.code); });
     peer.on('connection', conn => {
       if (Net.conn) { conn.close(); return; }
       bindConn(conn);
@@ -149,7 +143,7 @@ function netJoin(code, local) {
   peer.on('open', () => {
     const conn = peer.connect(NET_PREFIX + code, { reliable: false, serialization: 'json' });
     bindConn(conn);
-    setTimeout(() => { if (!Net.connected && Net.peer === peer) setStatus('Still connecting… check the code. (Some strict networks block peer-to-peer.)'); }, 8000);
+    setTimeout(() => { if (!Net.connected && Net.peer === peer) setStatus('Still connecting. Check the code. Some school and work networks block this.'); }, 8000);
   });
   peer.on('error', e => setStatus(e.type === 'peer-unavailable' ? `No room called ${code}.` : 'Network error: ' + (e.type || e.message || e)));
 }

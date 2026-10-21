@@ -1,461 +1,517 @@
-"""Generate the Uma Versus wiki (a single HTML page with hash views) from game data."""
+"""Uma Versus wiki, Mizuumi-style: character pages with an infobox, move cards (sprite on the
+move's first active frame + hitbox overlay drawn from the game data), frame data tables and combos.
+Written content (game plans, archetypes, How to play, patch notes) lives in wiki_content.py."""
 import os as _os
 ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repo root
 for _d in ('build/wiki', 'build/shots/ui', 'build/shots/fx'): _os.makedirs(_os.path.join(ROOT, _d), exist_ok=True)
-import json, html
+import json, html, base64, io
+from PIL import Image
 
-D = json.load(open(ROOT+'/build/wiki/wiki_data.json'))
-CB = json.load(open(ROOT+'/build/wiki/wiki_combos.json'))
-BUILD = D['build']
-ORDER = ['spe', 'suz', 'gs', 'vo', 'ds', 'mm', 'tt', 'kb']
+src = open(ROOT+'/tools/wiki_content.py').read()
+exec(src)          # D, CB, BUILD, ORDER, ARCH, CHAR, SYSTEMS, UPDATE15, UPDATE, helpers
+FR = json.load(open(ROOT+'/build/wiki/wiki_frames.json'))
+STG = json.load(open(ROOT+'/build/wiki/wiki_stages.json'))
+def _png(path, w=None):
+    im = Image.open(path)
+    if w and im.width > w: im = im.resize((w, round(im.height * w / im.width)), Image.LANCZOS)
+    b = io.BytesIO(); im.save(b, 'PNG', optimize=True); return 'data:image/png;base64,' + base64.b64encode(b.getvalue()).decode()
+VERSION = __import__('re').search(r"const VERSION = '([^']+)'", open(ROOT+'/src/ui.js').read()).group(1)
+LOGO = _png(ROOT+'/assets/art/logo.png', 720); ICON = _png(ROOT+'/assets/art/icon-64.png')
 E = html.escape
-ARROW = {'1': '↙', '2': '↓', '3': '↘', '4': '←', '6': '→', '7': '↖', '8': '↑', '9': '↗'}
-arrows = lambda mo: ''.join(ARROW.get(ch, ch) for ch in mo)
+nm = lambda cid: D['chars'][cid]['name'].title().replace('Mcqueen', 'McQueen')
+archname = lambda a: a.title().replace(' And ', ' and ')
 
-def notation(seq):
+# ------------------------------------------------------------------ sprites
+ATL = {}
+def atlas(cid):
+    if cid not in ATL:
+        j = json.load(open(ROOT+f'/assets/sprites/{cid}.json'))
+        im = Image.open(io.BytesIO(base64.b64decode(j['imgR'].split(',')[1]))).convert('RGBA')
+        ATL[cid] = (im, j['anims'], j['cols'])
+    return ATL[cid]
+def cell(cid, anim, fi):
+    im, anims, cols = atlas(cid)
+    a = anims.get(anim)
+    if not a: return Image.new('RGBA', (64, 64))
+    i = a[0] + min(fi, a[1] - 1)
+    c = im.crop(((i % cols) * 64, (i // cols) * 64, (i % cols) * 64 + 64, (i // cols) * 64 + 64))
+    return c.transpose(Image.FLIP_LEFT_RIGHT)          # facing right = mirrored "r" layer, as in the game
+def head(cid):
+    c = cell(cid, '800', 0); bb = c.getbbox() or (0, 0, 64, 64)
+    cx = (bb[0] + bb[2]) // 2; return c.crop((cx - 13, bb[1], cx + 13, bb[1] + 26))
+def uri(img):
+    b = io.BytesIO(); img.save(b, 'PNG', optimize=True); return 'data:image/png;base64,' + base64.b64encode(b.getvalue()).decode()
+def strip(cid, anim, scale=3):
+    im, anims, cols = atlas(cid); n = anims[anim][1]
+    s = Image.new('RGBA', (64 * scale * n, 64 * scale))
+    for i in range(n): s.paste(cell(cid, anim, i).resize((64 * scale, 64 * scale), Image.NEAREST), (i * 64 * scale, 0))
+    return uri(s), n
+
+# move image: game pixels around the fighter, x -100..230, 270 tall, following her up for air moves
+VW, VH, OX = 330, 270, 100
+def oy(f):
+    boxes = f['hits'] + f['grab'] + f['refl'] + [b[:4] for b in f['projs']] + ([f['hurt']] if f['hurt'] else [])
+    top = min([f['y'] - 200] + [b[1] - 10 for b in boxes])
+    return -top
+def move_img(cid, f):
+    can = Image.new('RGBA', (VW, VH)); OY = oy(f)
+    sp = cell(cid, f['anim'], f['fi']).resize((192, 192), Image.NEAREST)
+    can.alpha_composite(sp, (OX - 96, OY + f['y'] - 192))
+    return uri(can)
+def overlay(f):
+    OY = oy(f)
+    r = lambda b, cls: f'<rect class="{cls}" x="{b[0] + OX}" y="{b[1] + OY}" width="{b[2]}" height="{b[3]}"/>'
+    parts = [f'<line class="gl" x1="0" y1="{OY}" x2="{VW}" y2="{OY}"/>'] if OY < VH else []
+    if f['hurt']: parts.append(r(f['hurt'], 'hu'))
+    for b in f['refl']: parts.append(r(b, 'rf'))
+    for b in f['grab']: parts.append(r(b, 'gr'))
+    for b in f['hits']: parts.append(r(b, 'hi'))
+    for b in f['projs']: parts.append(r(b, 'pj'))
+    return f'<svg class="box" viewBox="0 0 {VW} {VH}" aria-hidden="true">{"".join(parts)}</svg>'
+
+# ------------------------------------------------------------------ move descriptions
+NORMAL_DESC = {
+  '5L': 'Fastest standing attack. Chains into 5M or 5H, cancels into skills, and starts the auto-combo if you mash L.',
+  '5M': 'Midrange poke with a small step forward. Cancels into 5H and skills.',
+  '5H': 'Two hits. The second launches, and you can jump cancel it (hold ↑) for an air combo.',
+  '2L': 'Fast low jab.',
+  '2M': 'Sliding low kick that travels forward. Good starter from a distance.',
+  '2H': 'Launcher, and an anti-air: the upper body beats air attacks during startup. Jump cancel on hit.',
+  '6M': "Hop overhead. You're airborne, so lows beat it.",
+  'jL': 'Fast air attack.', 'jM': 'Air attack.', 'jH': 'Strongest air attack and the usual jump-in.',
+  'dL': 'Quick dash jab that combos into 5M. →→ + L, or L during a dash.',
+  'dM': 'Long dash lunge. →→ + M.',
+  'dH': 'Leaping overhead kick that knocks down. →→ + H.',
+  'throw': 'L + M up close, hold back to throw the other way. Beats blocking. Tech with L + M.',
+  'GC': 'S + H while blocking, 50 Spurt. Invincible and knocks them away.',
+}
+EXTRA = {('vo', 'jL'): 'Also hits behind her, so it crosses up.', ('vo', 'jM'): "Wide hitbox that hits behind her. Vodka's main cross-up.",
+         ('gs', '2L'): 'Chains into itself.', ('gs', '5L'): 'Plus on block. Her pressure starts here.',
+         ('ds', '5M'): 'Very long for a medium.', ('mm', '5M'): 'One of the longest pokes in the game.',
+         ('suz', '5M'): 'Good reach and quick startup.'}
+NAMES = {**NORMAL_NAMES, '2M': 'Crouching M', '2H': 'Crouching H', '6M': 'Hop Overhead', 'throw': 'Throw', 'GC': 'Counter Spurt'}
+NOTATION = {'throw': 'L+M', 'GC': 'S+H (blocking)', '6M': '6M', 'dL': '66L', 'dM': '66M', 'dH': '66H', 'jL': 'j.L', 'jM': 'j.M', 'jH': 'j.H'}
+
+def props(cid, mid, f, m):
+    """bullet list of properties read from the data"""
     out = []
-    for t in seq.split(' '):
-        if t == 'jc': out.append('<span class="tag">jump cancel</span>')
-        elif t == 'dc': out.append('<span class="tag">→→ dash cancel</span>')
-        elif t == ',': out.append('<span class="tag">link</span>')
-        elif t[:-1].isdigit() and len(t) >= 4: out.append(f'<b>{arrows(t[:-1])}{t[-1]}</b>')
-        else: out.append(f'<b>{E(t)}</b>')
-    return ' <span class="sep">›</span> '.join(out)
+    if f['inv'] or m['inv']:
+        iv = m['inv']; out.append(f'Invincible on frames {iv[0]}–{iv[1]}.' if iv else 'Invincible.')
+    if f.get('aaInv'): out.append(f'Beats air attacks on frames {f["aaInv"][0]}–{f["aaInv"][1]}, but not ground attacks.')
+    if f.get('armor'): out.append(f'{f["armorHits"]}-hit armor on frames {f["armor"][0]}–{f["armor"][1]}.')
+    if f.get('projInv'): out.append(f'Passes through projectiles on frames {f["projInv"][0]}–{f["projInv"][1]}.')
+    if f.get('cw'): out.append(f'Catches strikes on frames {f["cw"][0]}–{f["cw"][1]}' + (' and parries projectiles.' if f['cproj'] else '. Throws and projectiles beat it.'))
+    if m['hard']: out.append('Hard knockdown (no quick rise).')
+    elif m['kd'] and mid not in ('GC', 'dH'): out.append('Knocks down.')
+    if f['projs']: out.append('Projectile.')
+    return out
 
-def adv(v, m, kind):
-    if v is None: return '<span class="na">—</span>'
-    if kind == 'hit' and m['kd'] and v > 25: return '<span class="kd">KD</span>'
-    if kind == 'hit' and v > 40: return '<span class="kd">Launch</span>'
-    cls = 'plus' if v > 0 else 'minus' if v < 0 else 'even'
-    return f'<span class="{cls}">{"+" if v > 0 else ""}{v}</span>'
+# ------------------------------------------------------------------ html pieces
+def advc(v, m, kind): return adv(v, m, kind)
+def recov(m):
+    if m['startup'] and m['active']: return m['total'] - (m['startup'] + m['active'] - 1)
+    if m['startup']: return m['total'] - m['startup']
+    return None
+def inv_cell(cid, m, f):
+    t = []
+    if m['inv']: t.append(f'{m["inv"][0]}–{m["inv"][1]}')
+    if f and f.get('aaInv'): t.append(f'Air {f["aaInv"][0]}–{f["aaInv"][1]}')
+    if f and f.get('armor'): t.append(f'Armor {f["armor"][0]}–{f["armor"][1]}')
+    if f and f.get('projInv'): t.append(f'Proj {f["projInv"][0]}–{f["projInv"][1]}')
+    if f and f.get('cw'): t.append(f'Counter {f["cw"][0]}–{f["cw"][1]}')
+    return ', '.join(t) or '<span class="na">-</span>'
+def data_row(cid, m, label, f):
+    return (f'<tr>{"<th scope=row>" + label + "</th>" if label is not None else ""}<td>{m["dmg"] or "-"}</td><td>{guard(m["guard"])}</td><td>{num(m["startup"])}</td><td>{num(m["active"])}</td>'
+            f'<td>{num(recov(m))}</td><td>{advc(m["onBlock"], m, "block")}</td><td>{advc(m["onHit"], m, "hit")}</td><td class="iv">{inv_cell(cid, m, f)}</td></tr>')
+HEAD = '<tr>{}<th>Damage</th><th>Guard</th><th>Startup</th><th>Active</th><th>Recovery</th><th>On-Block</th><th>On-Hit</th><th>Invuln</th></tr>'
 
-def num(v): return '<span class="na">—</span>' if v in (None, 0) else str(v)
+def figure(cid, mid, alt):
+    f = FR[cid]['moves'].get(mid)
+    if not f: return ''
+    return (f'<figure class="mimg"><div class="frame"><img src="{move_img(cid, f)}" alt="{E(alt)}">{overlay(f)}</div>'
+            f'<figcaption>Frame {f["t"]}</figcaption></figure>')
 
-GUARD = {'mid': 'Mid', 'low': 'Low', 'high': 'Overhead', 'throw': 'Throw', '': '—'}
-def guard(g): return ' / '.join(GUARD.get(x, x) for x in g.split('/')) if g else '—'
+def move_card(cid, mid, mv):
+    m = mv[mid]; f = FR[cid]['moves'].get(mid, {})
+    desc = [NORMAL_DESC.get(mid, '')] + ([EXTRA[(cid, mid)]] if (cid, mid) in EXTRA else []) + props(cid, mid, f, m)
+    return f"""<article class="move" id="{cid}.{mid}">
+  <header class="mhead"><h4>{E(NAMES.get(mid, mid))}</h4><span class="minput">{E(NOTATION.get(mid, mid))}</span></header>
+  <div class="mbody">{figure(cid, mid, NAMES.get(mid, mid))}
+    <div class="mdata"><div class="tw"><table class="mft"><thead>{HEAD.format('')}</thead><tbody>{data_row(cid, m, None, f)}</tbody></table></div>
+    <ul class="mnotes">{''.join(f'<li>{E(x)}</li>' for x in desc if x)}</ul></div></div></article>"""
 
-NORMAL_NAMES = {'5L': 'Standing L', '5M': 'Standing M', '5H': 'Standing H', '2L': 'Crouching L', '2M': 'Crouching M (slide)', '2H': 'Crouching H (launcher)',
-                '6M': 'Hop overhead (→M)', 'jL': 'Jumping L', 'jM': 'Jumping M', 'jH': 'Jumping H', 'dL': 'Dash L', 'dM': 'Dash M', 'dH': 'Dash H',
-                'throw': 'Throw (L+M)', 'GC': 'Counter Spurt (S+H blocking)'}
-NORMAL_ORDER = ['5L', '5M', '5H', '2L', '2M', '2H', '6M', 'jL', 'jM', 'jH', 'dL', 'dM', 'dH', 'throw', 'GC']
+def skill_card(cid, m, mv):
+    rows, notes = '', []
+    vers = [(m['id'] + '.L', 'L'), (m['id'], 'M' if (m['id'] + '.L') in mv else 'L / M'), (m['id'] + 'X', 'EX')]
+    for vid, lab in vers:
+        if vid in mv: rows += data_row(cid, mv[vid], f'<span class="ver">{lab}</span>', FR[cid]['moves'].get(vid))
+    for fm in D['chars'][cid]['moves']:
+        if fm['followOf'] == m['id']: rows += data_row(cid, fm, '› ' + E(fm['name']), FR[cid]['moves'].get(fm['id']))
+    if m['note']: notes.append(m['note'] + '.')
+    if m['vnote']: notes.append(m['vnote'].replace(' · ', ', ') + '.')
+    if m['exNote']: notes.append('EX: ' + m['exNote'] + '.')
+    if m['fnote']: notes.append(m['fnote'][0].upper() + m['fnote'][1:].replace(' · ', ', ') + '.')
+    notes += props(cid, m['id'], FR[cid]['moves'].get(m['id'], {}), m)
+    if m['input']: notes.append(f'Shortcut: {m["input"]} (M version, with a cooldown and 10% less damage).')
+    inp = arrows(m['motion']) + ' + L / M / H'
+    return f"""<article class="move skill" id="{cid}.{m['id']}">
+  <header class="mhead"><h4>{E(m['name'])}</h4><span class="minput">{m['motion']}X <span class="arw">{inp}</span></span></header>
+  <div class="mbody">{figure(cid, m['id'], m['name'])}
+    <div class="mdata"><div class="tw"><table class="mft"><thead>{HEAD.format('<th>Version</th>')}</thead><tbody>{rows}</tbody></table></div>
+    <ul class="mnotes">{''.join(f'<li>{E(x)}</li>' for x in notes)}</ul></div></div></article>"""
 
-# ------------------------------------------------------------------ written content
-ARCH = {
-  'ALL-ROUNDER': ('A little of everything', 'Has a tool for every range: a projectile, an anti-air, a way in and a way to defend. Rarely loses a matchup outright, but also rarely wins one on paper. Good for learning the game and for adapting mid-match.'),
-  'HIT AND RUN': ('Get in, hit, get out', 'Darts in for one clean hit, then leaves before the opponent can answer. High damage and strong escape tools, balanced by low health and few ways to defend once cornered.'),
-  'RUSHDOWN': ('Stay in their face', 'Fast, plus-on-block attacks and ways to keep a turn going after it is blocked. Wants to start pressure and never let it end; struggles when forced to play from a distance.'),
-  'VORTEX': ('Knock down, then make them guess', 'Built around knockdowns that remove the defender\'s wake-up options, followed by a 50/50: in front or behind, high or low, strike or throw. A wrong guess leads back to another knockdown.'),
-  'BAIT AND PUNISH': ('Make them commit, then make them pay', 'Waits for the opponent to act first. Long pokes, a counter stance and extra damage on recovering opponents turn every mistake into a big punish. Has few ways to start offense alone, and once the opponent stops taking the bait it has to work hard.'),
-  'GLASS CANNON': ('Win fast or lose fast', 'Turns a single opening into huge damage, but has the least health and almost no defensive tools. Every exchange matters: the round can be over in two combos either way.'),
-  'SHOTO': ('The classic toolkit', 'A projectile, an invincible uppercut and an advancing attack, in the tradition of Street Fighter\'s Ryu and Ken. Easy to pick up and solid in every matchup, but the game plan is predictable.'),
-  'ZONER': ('Control the screen', 'Keeps the opponent at a distance with projectiles at different angles and speeds. Low damage, so wins come from many small hits and from denying the opponent a way in.'),
-}
-CHAR = {
-  'spe': {
-    'plan': ['Special Week has an answer at every range. Dream Shot controls the middle of the screen, Rising Dream stops jump-ins, Spurt Tornado travels in and passes over low pokes, and Last Spurt Tackle armors through a single hit or projectile to close distance.',
-             'The game plan is to play to whatever the opponent is weak against. Against a zoner, walk behind L Dream Shot and armor through their shots with Tackle. Against rushdown, block, then reversal with Rising Dream.'],
-    'strong': ['Tools for every situation', 'Fully invincible EX Rising Dream', 'Straightforward combos that end in a knockdown'],
-    'weak': ['Specialists beat her at their own game', 'Rising Dream and Last Spurt Tackle are very punishable if blocked'],
-    'tips': ['L Dream Shot is slow: walk or dash behind it to approach.', 'L Rising Dream has less invincibility but recovers faster. Use M or EX when you need it to beat a meaty attack.', 'Last Spurt Tackle absorbs one hit, including a projectile. EX absorbs two.'],
-  },
-  'suz': {
-    'plan': ['Land one clean hit, then leave. Great Escape (M) runs through the opponent and keeps going, and Silent Flicker kicks then hops far back, so many of her moves are minus on paper but safe because she ends up out of reach.',
-             'Her damage per hit (×1.1) is second only to Tokai Teio, and she moves fast: a quick dash, a long invincible backdash and an air dash. The cost is 8,500 health and a weak reversal, so getting cornered is dangerous.'],
-    'strong': ['High damage per hit (×1.1, second only to Teio)', 'Moves that leave her out of punish range', 'Air dash and a long invincible backdash'],
-    'weak': ['Second-lowest health in the cast (8,500)', 'Lead the Pack has little invincibility, especially the L version', 'Few options once she is pinned in a corner'],
-    'tips': ['Great Escape L stops in front, M runs through. Mixing the two makes them hard to punish on reaction.', 'Silent Flicker M on block leaves you about 240 px away when you recover (about 200 for L, 270 for EX). Few moves can reach that far.', 'Air dash needs some height and has 7 frames of landing recovery if you land out of it.'],
-  },
-  'gs': {
-    'plan': ['Gold Ship wants to start her turn and keep it. Her 5L comes out in 4 frames, recovers faster than anyone else\'s and is plus on block (+2), crouching jabs chain into themselves, and Barrage is plus on block too.',
-             'Golshi Rush is the mixup engine: during the dash, choose a low slide, an overhead hop chop, an untechable command grab, or stop dead and do something else. Dash cancels (→→ after a normal, 10 Spurt) keep pressure going after a blocked string.'],
-    'strong': ['Fastest normals in the game (4f 5L, 6f 5M)', 'Plus-on-block pressure tools', 'Four-way command dash mixup'],
-    'weak': ['No invincible reversal attack (only EX Golshi Rush is invincible, and it is a dash)', 'Golshi Dropkick!! is about −22 on block', 'Struggles against keep-away at long range'],
-    'tips': ['End blocked strings with L Barrage (+5) to keep your turn.', 'From the command dash, the grab beats players who block, the slide beats standing guard, and the chop beats crouching guard.', 'Golshi Mode adds 2 frames of blockstun to everything for 6 seconds, which makes even more of her moves plus.'],
-  },
-  'vo': {
-    'plan': ['Vodka\'s loop starts with a hard knockdown: Full Throttle, the Pit Stop command grab, or the EX versions of Drift Hop and Drift Drop. A hard knockdown cannot be quick-risen, so the opponent always gets up at the same time and her setups line up.',
-             'On their wake-up, make them guess. Drift Hop L lands in front and M crosses over. A meaty 2L is low, Drift Drop and j.M are overheads, and a walk-up Pit Stop beats blocking. A wrong guess leads into another hard knockdown.'],
-    'strong': ['Consistent wake-up setups after hard knockdowns', 'Cross-up jumping attacks (j.L / j.M hit behind her)', 'Untechable command grab'],
-    'weak': ['Rev Kick only beats air attacks, it is not invincible on the ground', 'Average neutral game: she has to earn the first knockdown', 'Patterns become readable if you never vary them'],
-    'tips': ['After Full Throttle, the opponent is down for a fixed 34 frames. Practice your timing in Training.', 'Drift Hop is an overhead and also crosses up with M: two guesses at once.', 'Pit Stop leaves the opponent close to you, ready for the next mixup.'],
-  },
-  'mm': {
-    'plan': ['McQueen wants the opponent to move first. Her 5M and Stayer\'s Lance reach further than almost anything in the game, so walking toward her is risky, and anyone who throws out an attack up close may run into Noble Parry.',
-             'Her passive, Punish, adds 20% damage and extra hitstun to the first hit on an opponent who is recovering from a move or a long landing. Whiffed specials, blocked unsafe moves and badly spaced jump-ins all turn into big damage. Long-Distance Stride covers the far end of the screen, and its EX passes through projectiles.'],
-    'strong': ['Very long pokes: Stayer\'s Lance has the longest reach of any poke', 'Counter stance that catches any strike, high or low', 'Highest health (10,500) and PUNISH! damage'],
-    'weak': ['Little offense of her own', 'Noble Parry loses to throws and (except EX) projectiles', 'A patient opponent who stops attacking takes away her game'],
-    'tips': ['Noble Parry catches strikes from frame 3. It does not catch throws, so a smart opponent will grab you out of it. Use it when you expect an attack, not on reflex.', 'Block an unsafe move, then punish it: the PUNISH! bonus applies to the first hit of your combo.', 'EX Stayer\'s Lance and EX Long-Distance Stride go through projectiles, which makes zoners think twice.'],
-  },
-  'tt': {
-    'plan': ['Teio turns one hit into a lot of damage. Her specials can chain into each other on hit: after the last hit of one skill, input another and it comes out immediately. Each skill can be used once per combo, so a full chain looks like Teio Step › Imperial Rush › Emperor\'s Rise.',
-             'Her health is the lowest in the game (8,000) and Emperor\'s Rise is not invincible unless you spend meter, so her defense is thin. When her health drops below 30%, Miracle Mode adds 15% damage for a last-ditch comeback.'],
-    'strong': ['Highest damage in the cast (×1.12) and the biggest combos', 'Specials chain into each other on hit', 'Miracle Mode comeback below 30% health'],
-    'weak': ['Lowest health (8,000)', 'No invincible reversal without meter', 'Chains only work on hit: a blocked special is just a blocked special'],
-    'tips': ['Input the next special after the current one\'s last hit. The 9-frame buffer gives you some room.', 'Miracle Leap is an overhead: mix it with low 2M and 2L.', 'EX Teio Step goes through projectiles to start a chain from mid-range.'],
-  },
-  'kb': {
-    'plan': ['Kitasan is the textbook shoto. Festival Drum is a fireball with quick recovery, Matsuri Uppercut is the strongest invincible reversal in the cast, Festival Whirlwind travels in and passes over lows, and Kitasan Straight is a nearly safe step-in punch.',
-             'The plan is the classic one: throw fireballs to make the opponent jump, uppercut the jump, and use the step-in and whirlwind to take your turn up close. Special Week shares some tools but plays as an all-rounder; Kitasan has the stronger fundamentals and the more predictable game plan.'],
-    'strong': ['Fast-recovering fireball (28 frames total)', 'Strongest invincible uppercut (1,300 damage)', 'Whirlwind works on the ground and in the air'],
-    'weak': ['Predictable once the opponent learns the pattern', 'Matsuri Uppercut is very punishable if blocked', 'No armor or counter tools'],
-    'tips': ['L Festival Drum is slow enough to walk behind.', 'Sky Whirlwind is an overhead that changes your jump arc.', 'Kitasan Straight is only slightly minus on block. End blocked strings with it to keep pressure.'],
-  },
-  'ds': {
-    'plan': ['Daiwa keeps the opponent where she wants them. Scarlet Shot goes straight (two can be on screen), High Top Line angles upward to stop jumps, Ground Rose travels low along the ground, and Sky Shot fires downward from a jump.',
-             'Rose Barrier reflects incoming projectiles and knocks away anyone too close, which sends them back to shooting range. Her damage is the lowest in the cast (×0.88) and her dash is slow, so she wins through many small hits.'],
-    'strong': ['Projectiles at four different angles', 'Reflector that also pushes people away', 'Long-reaching normals and a strong backdash'],
-    'weak': ['Lowest damage (×0.88)', 'Slowest dash', 'Struggles once an opponent is up close'],
-    'tips': ['Mix Ground Rose (low) with Scarlet Shot (mid) so opponents cannot just block one way.', 'High Top Line L is flatter and covers a forward jump. M is steeper and covers a jump from closer.', 'Rose Barrier\'s reflect window is longest on EX.', 'Number One Finish is a volley of shots, not a rush: fire it to punish a whiffed move or a dash from mid-range, or end a combo with it.'],
-  },
-}
+def super_card(cid, mv):
+    m = mv.get('SU')
+    if not m: return ''
+    return f"""<article class="move super" id="{cid}.SU">
+  <header class="mhead"><h4>{E(m['name'])}</h4><span class="minput">S+H</span></header>
+  <div class="mbody">{figure(cid, 'SU', m['name'])}
+    <div class="mdata"><div class="tw"><table class="mft"><thead>{HEAD.format('')}</thead><tbody>{data_row(cid, m, None, FR[cid]['moves'].get('SU'))}</tbody></table></div>
+    <ul class="mnotes">{''.join(f'<li>{x}</li>' for x in super_notes(cid, m))}</ul></div></div></article>"""
+def super_notes(cid, m):
+    if m.get('shots'):
+        return ['Full Spurt gauge (100). Invincible on frames 1–20.',
+                f'A volley of {m["shots"] - 1} golden roses and one big finishing rose. Each shot is its own projectile, so they can hit, get blocked or miss separately.',
+                f'Up close to midrange all six hit for {m["dmg"]:,} and end in a hard knockdown. From full screen, or against a juggled or crouching opponent, some can fly past.',
+                "Goes through normal projectiles and can't be reflected. Costs no juggle points, so it works as a combo ender.",
+                'Punishable on block up close, safe from range.']
+    return ['Full Spurt gauge (100).', 'Invincible sprint. If the first hit lands, the whole cinematic plays out, even on a juggled opponent. Cancel into it at the end of a combo.']
+
+def sprite_box(cid, anim, cls, scale=3, spd=0.13):
+    u, n = strip(cid, anim, scale)
+    return f'<span class="spr {cls}" style="--n:{n};--d:{n * spd:.2f}s;background-image:url({u})" role="img" aria-label="{E(nm(cid))}"></span>'
 
 def char_page(cid, idx):
-    c = D['chars'][cid]; t = CHAR[cid]; col = c['color']
-    mv = {m['id']: m for m in c['moves']}
-    arch_title, arch_desc = ARCH[c['arch']]
-    flags = []
-    if c['flags']['airDash']: flags.append('Air dash (once per jump)')
-    if c['flags']['lightChain']: flags.append('Crouching L chains into itself')
-    if c['flags']['dashCancel']: flags.append('Dash cancel (→→ during a normal, 10 Spurt)')
-    if c['flags']['projMax'] > 1: flags.append(f"Up to {c['flags']['projMax']} projectiles on screen")
-    if c['flags']['dmgMul'] != 1: flags.append(f"Damage ×{c['flags']['dmgMul']:g}")
-    if c['flags'].get('punisher'): flags.append('Punish: +20% damage on recovering opponents')
-    if c['flags'].get('specialChain'): flags.append('Special chain: skills cancel into other skills on hit')
-    if c['flags'].get('lowHpBoost'): flags.append('Miracle Mode: +15% damage below 30% health')
-    if c['backdash']: flags.append(f"Long backdash ({c['backdash']['inv']}f invincible)")
-    stats = [('Health', f"{c['hp']:,}"), ('Walk', f"{c['walk']:g} px/f"), ('Back walk', f"{c['back']:g} px/f"), ('Dash', f"{c['dash']:g} px/f"), ('Jump', f"{abs(c['jumpV']):g}")]
-    # skills
+    c = D['chars'][cid]; t = CHAR[cid]; col = c['color']; mv = {m['id']: m for m in c['moves']}
+    arch_t, arch_d = ARCH[c['arch']]
+    traits = []
+    if c['flags']['airDash']: traits.append('Air dash')
+    if c['flags']['lightChain']: traits.append('2L chains into itself')
+    if c['flags']['dashCancel']: traits.append('Dash cancel (10 Spurt)')
+    if c['flags']['projMax'] > 1: traits.append(f"{c['flags']['projMax']} projectiles on screen")
+    if c['flags'].get('punisher'): traits.append('Punish: +20% on recovering foes')
+    if c['flags'].get('specialChain'): traits.append('Special chain on hit')
+    if c['flags'].get('lowHpBoost'): traits.append('Miracle Mode below 30% HP')
+    if c['backdash']: traits.append(f"Long backdash ({c['backdash']['inv']}f invuln)")
+    infobox = f"""<aside class="infobox" style="--char:{col}">
+  <div class="ibtitle">{E(nm(cid))}</div>
+  <div class="ibport">{sprite_box(cid, '800', 'big')}</div>
+  <table><tbody>
+   <tr><th>Archetype</th><td>{E(archname(c['arch']))}</td></tr>
+   <tr><th>Health</th><td>{c['hp']:,}</td></tr>
+   <tr><th>Damage</th><td>×{c['flags']['dmgMul']:g}</td></tr>
+   <tr><th>Walk speed</th><td>{c['walk']:g}</td></tr><tr><th>Back walk</th><td>{c['back']:g}</td></tr>
+   <tr><th>Dash speed</th><td>{c['dash']:g}</td></tr><tr><th>Jump</th><td>{abs(c['jumpV']):g}</td></tr>
+   {'<tr><th>Traits</th><td>' + '<br>'.join(E(x) for x in traits) + '</td></tr>' if traits else ''}
+  </tbody></table></aside>"""
     skills = [m for m in c['moves'] if m['kind'] in ('special', 'throw') and m['motion'] and not m['isEx'] and not m['varOf'] and not m['followOf']]
-    skill_rows = ''
-    for m in skills:
-        L = mv.get(m['id'] + '.L'); X = mv.get(m['id'] + 'X')
-        def fd(x):
-            if not x: return '—'
-            bits = [f"{x['startup']}f" if x['startup'] else (f"catches {x['counter'][0]}–{x['counter'][1]}f" if x.get('counter') else None), f"{x['dmg']} dmg" if x['dmg'] else None]
-            return ' · '.join(b for b in bits if b)
-        skill_rows += f"""<tr><th scope="row"><span class="mv">{E(m['name'])}</span><span class="sub">{E(m['note'] or '')}</span></th>
-          <td class="inp">{arrows(m['motion'])} + L/M{'<br><span class="sub">or ' + E(m['input']) + ' (shortcut)</span>' if m['input'] else ''}</td>
-          <td>{E(m['vnote'] or 'Same as M')}<span class="sub mono">L: {fd(L or m)} · M: {fd(m)}</span></td>
-          <td>{E(m['exNote'] or '—')}<span class="sub mono">{fd(X)}</span></td></tr>"""
-        if m['fnote']:
-            skill_rows += f"""<tr class="follow"><th scope="row"><span class="sub">Follow-ups</span></th><td colspan="3">{E(m['fnote'])}</td></tr>"""
-    su = mv.get('SU')
-    if su: skill_rows += f"""<tr class="super"><th scope="row"><span class="mv">{E(su['name'])}</span><span class="sub">Super · costs the full Spurt gauge</span></th><td class="inp">S + H</td><td colspan="2">Invincible sprint into a cinematic combo · <span class="mono">{su['dmg']} dmg</span></td></tr>"""
-    # frame data
-    def fd_row(m, label):
-        return f"""<tr><th scope="row">{label}</th><td>{num(m['startup'])}</td><td>{num(m['active'])}</td><td>{m['total']}</td><td>{m['dmg'] or '—'}</td>
-          <td>{guard(m['guard'])}</td><td>{adv(m['onHit'], m, 'hit')}</td><td>{adv(m['onBlock'], m, 'block')}</td></tr>"""
-    normals = ''.join(fd_row(mv[k], NORMAL_NAMES[k]) for k in NORMAL_ORDER if k in mv)
-    specials = ''
-    for m in skills:
-        for vid, lab in [(m['id'] + '.L', ' L'), (m['id'], ' M'), (m['id'] + 'X', ' EX')]:
-            if vid in mv: specials += fd_row(mv[vid], E(m['name']) + f'<span class="ver">{lab}</span>')
-            elif lab == ' L' and m['id'] in mv: pass
-        for f in c['moves']:
-            if f['followOf'] == m['id']: specials += fd_row(f, '&nbsp;&nbsp;› ' + E(f['name']))
-    combos = ''
-    for cb in CB[cid]:
-        combos += f"""<li class="combo"><div class="ch"><span class="mv">{E(cb['name'])}</span><span class="dmg mono">{cb['dmg']:,} dmg · {cb['hits']} hits</span></div>
-          <div class="seq">{notation(cb['seq'])}</div><p class="sub">{E(cb['note'])}</p></li>"""
+    groups = [('Standing', ['5L', '5M', '5H']), ('Crouching', ['2L', '2M', '2H']), ('Jumping', ['jL', 'jM', 'jH']),
+              ('Command and dash attacks', ['6M', 'dL', 'dM', 'dH']), ('Universal', ['throw', 'GC'])]
+    normals = ''.join(f'<h3 id="{cid}.g{i}">{g}</h3>' + ''.join(move_card(cid, k, mv) for k in ks if k in mv) for i, (g, ks) in enumerate(groups))
+    combos = ''.join(f"""<tr><td class="cseq">{notation(cb['seq'])}</td><td class="num">{cb['dmg']:,}</td><td class="num">{cb['hits']}</td><td>{'★ ' if cb.get('level', 1) > 1 else ''}{E(cb['name'])}{' (corner)' if cb.get('corner') else ''}: {E(cb['note'])}</td></tr>""" for cb in CB[cid])
+    toc = [('overview', 'Overview'), ('normals', 'Normal moves'), ('skills', 'Skills'), ('super', 'Super'), ('combos', 'Combos'), ('tips', 'Tips')]
     return f"""
 <section class="view char" id="v-{cid}" data-view="{cid}" style="--char:{col}" hidden>
-  <header class="charhead">
-    <div class="gate"><span class="gl">Gate</span><span class="gn">{idx}</span></div>
-    <div><p class="eyebrow">{E(c['arch'])} · {E(arch_title)}</p><h1>{E(c['name'].title())}</h1><p class="lede">{E(c['blurb'])}</p></div>
-  </header>
-  <dl class="stats">{''.join(f'<div><dt>{k}</dt><dd>{v}</dd></div>' for k, v in stats)}</dl>
-  {'<ul class="traits">' + ''.join(f'<li>{E(f)}</li>' for f in flags) + '</ul>' if flags else ''}
-  <div class="two">
-    <div class="prose"><h2>Game plan</h2>{''.join(f'<p>{E(p)}</p>' for p in t['plan'])}</div>
-    <div class="sw"><h3>Strengths</h3><ul>{''.join(f'<li>{E(x)}</li>' for x in t['strong'])}</ul><h3>Weaknesses</h3><ul>{''.join(f'<li>{E(x)}</li>' for x in t['weak'])}</ul></div>
-  </div>
-  <h2>Skills</h2>
-  <div class="tw"><table class="skills"><thead><tr><th>Skill</th><th>Input</th><th>L / M versions</th><th>EX (H, 50 Spurt)</th></tr></thead><tbody>{skill_rows}</tbody></table></div>
-  <h2>Starter combos</h2>
-  <p class="note">Every combo here is performed automatically by the game's test suite on build {BUILD}, so they are confirmed to work. Damage is against a full-health opponent.</p>
-  <ul class="combos">{combos}</ul>
-  <h2>Frame data</h2>
-  <p class="note">Measured in the game on build {BUILD}. Startup is the first active frame. On hit / on block is frame advantage at close range: <span class="plus">+</span> means you recover first. <span class="kd">KD</span> = knockdown, <span class="kd">Launch</span> = launches for a juggle. Air moves show — for advantage.</p>
-  <div class="tw"><table class="fd"><thead><tr><th>Normals</th><th>Startup</th><th>Active</th><th>Total</th><th>Damage</th><th>Guard</th><th>On hit</th><th>On block</th></tr></thead><tbody>{normals}</tbody></table></div>
-  <div class="tw"><table class="fd"><thead><tr><th>Skills</th><th>Startup</th><th>Active</th><th>Total</th><th>Damage</th><th>Guard</th><th>On hit</th><th>On block</th></tr></thead><tbody>{specials}</tbody></table></div>
-  <h2>Tips</h2><ul class="tips">{''.join(f'<li>{E(x)}</li>' for x in t['tips'])}</ul>
+  <p class="crumb"><a href="#home" data-go="home">Uma Versus</a> › Characters › {E(nm(cid))}</p>
+  <h1 class="ptitle">{E(nm(cid))}</h1>
+  <p class="tagline">From Uma Versus Wiki · build {BUILD}</p>
+  {infobox}
+  <p class="lead"><b>{E(nm(cid))}</b> is the {E(archname(c['arch']).lower())} of the cast. {E(c['blurb'].split('. ', 1)[1])}</p>
+  <nav class="toc" aria-label="Contents"><p class="toch">Contents</p><ol>{''.join(f'<li><a href="#{cid}.{a}">{b}</a></li>' for a, b in toc)}</ol></nav>
+  <h2 id="{cid}.overview">Overview</h2>
+  <p class="archline"><b>{E(archname(c['arch']))}: {E(arch_t)}.</b> {E(arch_d)}</p>
+  {''.join(f'<p>{E(p)}</p>' for p in t['plan'])}
+  <div class="sw"><div class="pro"><p class="swh">Strengths</p><ul>{''.join(f'<li>{E(x)}</li>' for x in t['strong'])}</ul></div>
+    <div class="con"><p class="swh">Weaknesses</p><ul>{''.join(f'<li>{E(x)}</li>' for x in t['weak'])}</ul></div></div>
+  <h2 id="{cid}.normals">Normal moves</h2>
+  <p class="note">Images show the first active frame, with <span class="k hi"></span> hitboxes and the <span class="k hu"></span> hurtbox (<span class="k gr"></span> is throw range). Frame data is taken from the game at close range.</p>
+  {normals}
+  <h2 id="{cid}.skills">Skills</h2>
+  <p class="note">Motion + L or M for the free versions, + H for EX (50 Spurt). Images show the M version.</p>
+  {''.join(skill_card(cid, m, mv) for m in skills)}
+  <h2 id="{cid}.super">Super</h2>
+  {super_card(cid, mv)}
+  <h2 id="{cid}.combos">Combos</h2>
+  <p class="note">The same combos as the Combo Trials mode (★ = advanced). Damage is with scaling, on build {BUILD}.</p>
+  <div class="tw"><table class="ctab"><thead><tr><th>Combo</th><th>Damage</th><th>Hits</th><th>Notes</th></tr></thead><tbody>{combos}</tbody></table></div>
+  <h2 id="{cid}.tips">Tips</h2><ul>{''.join(f'<li>{E(x)}</li>' for x in t['tips'])}</ul>
 </section>"""
 
-def nav():
-    items = [('home', 'Home', ''), ('systems', 'How to play', '')]
-    chars = ''.join(f'<a href="#{cid}" data-go="{cid}" style="--char:{D["chars"][cid]["color"]}"><span class="dot"></span>{E(D["chars"][cid]["name"].title())}<span class="navarch">{E(D["chars"][cid]["arch"].title().replace(' And ',' and '))}</span></a>' for cid in ORDER)
-    return f"""<nav class="side" aria-label="Wiki sections">
-  <a href="#home" data-go="home">Home</a><a href="#systems" data-go="systems">How to play</a>
-  <p class="navh">Characters</p>{chars}
-  <p class="navh">Updates</p><a href="#update15" data-go="update15">Update 1.5 notes</a><a href="#update1" data-go="update1">Update 1 notes</a>
+def side():
+    chars = ''.join(f'<li><a href="#{cid}" data-go="{cid}"><img class="ico" src="{uri(head(cid))}" alt="">{E(nm(cid))}</a></li>' for cid in ORDER)
+    return f"""<nav class="side" aria-label="Wiki">
+  <div class="portal"><p class="ph">Navigation</p><ul><li><a href="#home" data-go="home">Main page</a></li><li><a href="#systems" data-go="systems">How to play</a></li></ul></div>
+  <div class="portal"><p class="ph">Characters</p><ul>{chars}</ul></div>
+  <div class="portal"><p class="ph">Game</p><ul><li><a href="#stages" data-go="stages">Stages</a></li></ul></div>
+  <div class="portal"><p class="ph">Patch notes</p><ul><li><a href="#update18" data-go="update18">Update 1.8</a></li><li><a href="#update17" data-go="update17">Update 1.7</a></li><li><a href="#update16" data-go="update16">Update 1.6</a></li><li><a href="#update15" data-go="update15">Update 1.5</a></li><li><a href="#update1" data-go="update1">Update 1</a></li></ul></div>
 </nav>"""
 
-arch_cards = ''.join(f"""<div class="arch"><p class="eyebrow">{E(a.title().replace(' And ',' and '))}</p><h3>{E(t)}</h3><p>{E(d)}</p>
-  <p class="who">{', '.join(E(D['chars'][cid]['name'].title()) for cid in ORDER if D['chars'][cid]['arch'] == a)}</p></div>""" for a, (t, d) in ARCH.items())
-roster = ''.join(f"""<a class="rcard" href="#{cid}" data-go="{cid}" style="--char:{D['chars'][cid]['color']}"><span class="gn">{i}</span>
-  <span class="rn">{E(D['chars'][cid]['name'].title())}</span><span class="ra">{E(D['chars'][cid]['arch'].title().replace(' And ',' and '))}</span>
-  <span class="rs mono">{D['chars'][cid]['hp']:,} HP</span></a>""" for i, cid in enumerate(ORDER, 1))
-
-SYSTEMS = f"""
-<section class="view" id="v-systems" data-view="systems" hidden>
-  <p class="eyebrow">Reference</p><h1>How to play</h1>
-  <div class="prose">
-  <h2>Default controls</h2>
-  <p>Every input can be rebound from <b>Controls</b> in the main menu (saved in your browser).</p>
-  <div class="tw"><table class="ctl"><thead><tr><th>Action</th><th>Player 1</th><th>Player 2</th><th>Gamepad</th></tr></thead><tbody>
-  <tr><th>Move / jump / crouch</th><td>W A S D</td><td>Arrow keys</td><td>D-pad / left stick</td></tr>
-  <tr><th>Light (L)</th><td>F</td><td>J or Num1</td><td>X / □</td></tr><tr><th>Medium (M)</th><td>G</td><td>K or Num2</td><td>Y / △</td></tr>
-  <tr><th>Heavy (H)</th><td>H</td><td>L or Num3</td><td>B / ○</td></tr><tr><th>Skill (S)</th><td>T</td><td>I or Num5</td><td>A / ✕</td></tr>
-  <tr><th>Throw (L+M)</th><td>R</td><td>U or Num4</td><td>LB</td></tr><tr><th>Super (S+H)</th><td>Y</td><td>O or Num6</td><td>RB</td></tr>
-  <tr><th>Taunt (L+H)</th><td>E</td><td>P or Num7</td><td>Back</td></tr><tr><th>Pause</th><td colspan="3">Esc / Start</td></tr></tbody></table></div>
-
-  <h2>Notation</h2>
-  <p>Directions use the numpad, as if the character faces right: <b>5</b> neutral, <b>2</b> down, <b>6</b> forward, <b>4</b> back. <b>5M</b> is a standing medium, <b>2M</b> a crouching medium, <b>j.H</b> a jumping heavy. <b>236</b> is ↓↘→, <b>623</b> is →↓↘, <b>214</b> is ↓↙←, <b>41236</b> is ←↙↓↘→. In combos, <b>›</b> means cancel or link into the next move.</p>
-
-  <h2>Defense</h2>
-  <ul>
-  <li><b>Block</b> by holding back. Hold down-back to block lows. Overheads (jumping attacks, hop moves, dive kicks) must be blocked standing.</li>
-  <li>You can block straight out of a dash: holding back cancels the dash immediately.</li>
-  <li><b>Throw</b> with L+M up close; hold back for a back throw. Throws beat blocking. Escape a throw by pressing L+M as it connects (command grabs cannot be escaped).</li>
-  <li><b>Counter Spurt</b>: press S+H while blocking to spend 50 Spurt on an invincible push-away.</li>
-  <li><b>Backdash</b> (←←) is briefly invincible.</li>
-  <li><b>Wake-up</b>: hold any attack button while knocked down to get up early, or hold ↓ to get up late. Hard knockdowns (throws, command grabs, supers, and some skills such as Vodka's Full Throttle) disable both.</li>
-  </ul>
-
-  <h2>Skills and the Spurt gauge</h2>
-  <ul>
-  <li>Do a skill's motion with <b>L</b> or <b>M</b> for its two free versions. With <b>H</b> it becomes the <b>EX</b> version, which costs 50 Spurt. Without 50 Spurt, H gives the M version.</li>
-  <li>The <b>S + direction</b> shortcut (S, →S, ←S, ↓S) does the M version without a motion, at the cost of a cooldown and 10% less damage.</li>
-  <li>The Spurt gauge fills as you deal and take damage. It pays for EX skills (50), Counter Spurt (50), Gold Ship's dash cancel (10) and supers (100, S+H).</li>
-  </ul>
-
-  <h2>Combos</h2>
-  <ul>
-  <li><b>Chains</b>: normals cancel into stronger normals: L › M › H.</li>
-  <li><b>Auto-combo</b>: on hit, mash L for 5L › 5M › 5H › skill.</li>
-  <li><b>Skill cancels</b>: any normal that connects can be cancelled into a skill or super.</li>
-  <li><b>Jump cancel</b>: after a launching hit (2H, or the second hit of 5H), hold ↑ to jump after them for an air combo.</li>
-  <li>The input buffer is 9 frames. A buffered button remembers the direction and motion you entered when you pressed it, so inputs made during hit freeze still come out as intended.</li>
-  </ul>
-  <h2>Combo scaling and limits</h2>
-  <ul>
-  <li><b>Damage scaling</b>: the first hit of a combo does full damage. After that, damage depends on what started the combo (a light starter: 80%, a medium: 90%, a heavy, counter hit or punish: 100%), and drops by a further 13% per hit from the 3rd hit, down to 25%. Supers always keep at least 50%. The combo counter shows the scaling for the next hit.</li>
-  <li><b>Juggle points</b>: every hit on an airborne opponent costs juggle points (normals 1, skills 2, bounces 1). At 10 the opponent can no longer be hit in the air.</li>
-  <li><b>Ground bounce</b>: j.H in an air combo slams the opponent into the ground and they bounce back up, so you can relaunch them (2H) after you land. Once per combo.</li>
-  <li><b>Wall bounce</b>: several EX knockdowns bounce the opponent off the corner or the edge of the screen, ready for a follow-up. Once per combo.</li>
-  <li><b>Hitstun decay</b>: after a combo has lasted 2 seconds, each new hit causes less hitstun and juggled opponents fall faster, so loops eventually drop.</li>
-  <li><b>Combo limit</b>: after 32 hits or 7 seconds, further hits pass through and the opponent drops out. This makes infinites impossible.</li>
-  <li>In combo notation, <b>link</b> means wait until you recover, then start the next move (it can't be cancelled into).</li>
-  </ul>
-
-  <h2>Movement</h2>
-  <ul>
-  <li>Double-tap → to dash and ←← to backdash. Press L, M or H during a dash, or input →→ + button, for a dash attack: L jab, M lunge, H leaping overhead kick.</li>
-  <li>→+M is a hop overhead. Low attacks beat it because you are briefly airborne.</li>
-  <li>Only Silence Suzuka can air dash. It needs some height, cannot attack for the first 8 frames, and has landing recovery.</li>
-  </ul>
-
-  <h2>Accounts</h2>
-  <ul>
-  <li>Accounts are optional: guests can play every mode. Make one from <b>Account</b> on the main menu with an email, a password, a display name (3–16 letters, numbers, spaces, _ . -) and a favourite runner.</li>
-  <li><b>Online name</b>: your display name is shown to your opponent in the lobby and during the match.</li>
-  <li><b>Cloud save</b>: controls, volume, Options and combo-trial progress are saved to your account every few seconds and come back when you sign in on another browser or computer.</li>
-  <li><b>Match history</b>: every online match you finish while signed in is saved, with your record, win rate and most-played runner on the Account screen. VS CPU matches are not counted, so they can't pad anyone's win rate.</li>
-  <li>Change your name or favourite runner, save now, or sign out from the Account screen.</li>
-  </ul>
-
-  <h2>Training, replays and online</h2>
-  <ul>
-  <li><b>Training</b> shows damage, combo scaling, juggle points, frame advantage and hitboxes. Keys: 1 dummy · 2 dummy guard · 3 hitboxes · 4 reset · 5 input display · 6 frame meter · 7 record the dummy · 8 play the recording back.</li>
-  <li><b>Frame meter</b>: one cell per frame for both players, coloured by startup (green), active (red), recovery (blue), hit or block stun (yellow) and outlined when invincible, plus the startup of your move and the frame advantage.</li>
-  <li><b>Dummy record &amp; playback</b>: press 7 to control the dummy and record up to 10 seconds, 7 again to stop, then 8 to have the dummy loop it while you practice blocking or punishing.</li>
-  <li><b>Combo trials</b>: every runner's combos as challenges the game checks for you, with a demo (9) that performs each one. Cleared trials are saved in your browser.</li>
-  <li><b>Replays</b>: every Versus, VS CPU and Online match is recorded. Press R on the results screen to watch, or D to save a file.</li>
-  <li><b>Online</b> uses rollback netcode and room codes. Both players need the same build: this wiki matches build <b class="mono">{BUILD}</b>.</li>
-  </ul>
-  </div>
-</section>"""
-
-UPDATE15 = f"""
-<section class="view" id="v-update15" data-view="update15" hidden>
-  <p class="eyebrow">Patch notes · build {BUILD}</p><h1>Update 1.5</h1>
-  <div class="prose">
-  <p>Team Spica is complete: three new characters bring the roster to eight.</p>
-  <h2>New characters</h2>
-  <ul><li><b>Mejiro McQueen</b> (Bait and Punish): long pokes, the Noble Parry counter stance, and the Punish passive (+20% damage on recovering opponents). Highest health in the cast.</li>
-  <li><b>Tokai Teio</b> (Glass Cannon): specials chain into each other on hit for the biggest combos in the game. Lowest health, no free reversal, and Miracle Mode below 30% health.</li>
-  <li><b>Kitasan Black</b> (Shoto): fireball, invincible uppercut, a whirlwind kick on the ground and in the air, and a step-in punch.</li></ul>
-  <h2>Systems</h2>
-  <ul><li>New move properties: counter stances, passing through projectiles (several EX moves), special chains and comeback damage.</li>
-  <li>Move list shows each character's passive traits.</li>
-  <li>CPU: McQueen's CPU waits, pokes and uses Noble Parry when you swing up close.</li></ul>
-  <h2>Online</h2>
-  <ul><li>Both players need build <b class="mono">{BUILD}</b>. Older builds are refused at connect.</li></ul>
-  </div>
-</section>"""
-
-UPDATE = f"""
-<section class="view" id="v-update1" data-view="update1" hidden>
-  <p class="eyebrow">Patch notes · build {BUILD}</p><h1>Update 1</h1>
-  <div class="prose">
-  <h2>New</h2>
-  <ul><li>Three new characters: <b>Gold Ship</b> (Rushdown), <b>Vodka</b> (Vortex) and <b>Daiwa Scarlet</b> (Zoner).</li>
-  <li><b>Control mapping</b> for both keyboard layouts and gamepads, saved in your browser.</li>
-  <li>Unique animation profiles for every character: timing, taunts, intros, win poses and signature effects.</li>
-  <li>A <b>Combos</b> page in the in-game move list, and this wiki.</li></ul>
-  <h2>Gameplay</h2>
-  <ul><li><b>EX rework</b>: motion + L and M are the free versions; motion + H is the EX and costs 50 Spurt. The Skill button no longer triggers EX.</li>
-  <li><b>Guard button removed</b>: block by holding back. Taunt moved to L+H.</li>
-  <li><b>Blocking out of a dash</b>: holding back cancels a dash instantly.</li>
-  <li><b>Movement</b>: walk and dash speeds brought closer together, backdash invincibility shortened (4 frames for most), double jump removed, and air dash now needs height, cannot attack for 8 frames and has landing recovery.</li>
-  <li><b>Combos</b>: 9-frame input buffer that remembers your direction and motion, slightly more hitstun on normals, less pushback on hit, more lenient juggles, higher 5H launchers, and jump cancels only after a launching hit.</li>
-  <li>Projectiles can now travel at angles, along the ground, from the air, two at a time, and be reflected.</li></ul>
-  <h2>Characters</h2>
-  <ul><li><b>Special Week</b> is now an All-Rounder: Guts! is replaced by Last Spurt Tackle, an armored charge.</li>
-  <li><b>Silence Suzuka</b> is now Hit and Run: new Silent Flicker (kick, then hop away), Turbine Roll moved to ←↙↓↘→, teleport and double jump removed, damage +10%, health 8,500.</li>
-  <li><b>Gold Ship</b>: H versions of her skills are now EX versions.</li></ul>
-  </div>
-</section>"""
-
-HOME = f"""
+roster2 = ''.join(f"""<a class="rcard" href="#{cid}" data-go="{cid}" style="--char:{D['chars'][cid]['color']}">{sprite_box(cid, '800', 'mid')}
+  <span class="rn">{E(nm(cid))}</span><span class="ra">{E(archname(D['chars'][cid]['arch']))}</span></a>""" for cid in ORDER)
+archrows = ''.join(f"""<tr><th scope="row">{E(archname(a))}</th><td>{E(t)}. {E(d)}</td><td>{', '.join(f'<a href="#{cid}" data-go="{cid}">{E(nm(cid))}</a>' for cid in ORDER if D['chars'][cid]['arch'] == a)}</td></tr>""" for a, (t, d) in ARCH.items())
+HOME2 = f"""
 <section class="view" id="v-home" data-view="home">
-  <div class="hero">
-    <p class="eyebrow">Fan-made fighting game · Update 1.5 · build {BUILD}</p>
-    <h1 class="big">Uma Versus Wiki</h1>
-    <p class="lede">Characters, moves, frame data and combos for the Uma Versus browser fighting game. Frame data and combos are generated from the game itself, so they match build {BUILD}.</p>
-  </div>
-  <h2>The roster</h2>
-  <div class="roster">{roster}</div>
+  <h1 class="ptitle">Uma Versus Wiki</h1>
+  <p class="tagline">Update {VERSION} · build {BUILD}</p>
+  <img class="homelogo" src="{LOGO}" alt="Uma Versus logo">
+  <div class="welcome"><p>The wiki for <b>Uma Versus</b>, a fan-made Umamusume fighting game you play in the browser. Frame data and combos come straight from the game, so they're accurate for build <span class="mono">{BUILD}</span>.</p></div>
+  <h2>Characters</h2>
+  <div class="roster">{roster2}</div>
   <h2>Archetypes</h2>
-  <p class="note">Each character is built around a classic fighting-game archetype.</p>
-  <div class="archs">{arch_cards}</div>
-  <p class="note">New to the game? Start with <a href="#systems" data-go="systems">How to play</a>.</p>
+  <div class="tw"><table class="atab"><thead><tr><th>Archetype</th><th>Plays like</th><th>Characters</th></tr></thead><tbody>{archrows}</tbody></table></div>
+  <h2>Getting started</h2>
+  <ul><li><a href="#systems" data-go="systems">How to play</a>: controls, notation, defense and combos</li><li><a href="#stages" data-go="stages">Stages</a></li><li><a href="#update18" data-go="update18">Latest patch notes (1.8.1)</a></li></ul>
 </section>"""
 
 CSS = """
-/* Layout: sidebar index + single content column, like a race program with a table of contents. */
 :root {
-  --bg: #f1f5ef; --panel: #ffffff; --fg: #142118; --muted: #56675b; --line: #d2ddd2; --accent: #1d7346; --gold: #a97b06;
-  --plus: #13804a; --minus: #c0362c; --tag: #e7efe6;
-  --display: "Saira Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
-  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --page: #eef0f3; --paper: #ffffff; --ink: #202122; --muted: #54595d; --line: #c8ccd1; --soft: #f8f9fa; --head: #eaecf0;
+  --link: #3366cc; --bar: #1b2133; --barink: #e8ebf5; --plus: #14866d; --minus: #d33; --gold: #ac6600;
+  --hi: #ff2d2d; --hu: #23b85e; --gr: #f2b705; --pj: #ff6a00; --rf: #8a5cf6;
+  --serif: "Linux Libertine", Georgia, "Times New Roman", serif;
+  --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0d1611; --panel: #142019; --fg: #e4eee6; --muted: #93a798; --line: #23352a; --accent: #4cc283; --gold: #e2b43a;
-  --plus: #4cd38a; --minus: #ff7a6e; --tag: #1c2c22; color-scheme: dark } }
-:root[data-theme="dark"] { --bg: #0d1611; --panel: #142019; --fg: #e4eee6; --muted: #93a798; --line: #23352a; --accent: #4cc283; --gold: #e2b43a;
-  --plus: #4cd38a; --minus: #ff7a6e; --tag: #1c2c22; color-scheme: dark }
+  --page: #101418; --paper: #181c22; --ink: #e6e8eb; --muted: #a2a9b1; --line: #3a414a; --soft: #1f242b; --head: #262c34;
+  --link: #88a3e8; --bar: #0b0e14; --plus: #3fd4a8; --minus: #ff7b7b; --gold: #e8b04e; color-scheme: dark } }
+:root[data-theme="dark"] { --page: #101418; --paper: #181c22; --ink: #e6e8eb; --muted: #a2a9b1; --line: #3a414a; --soft: #1f242b; --head: #262c34;
+  --link: #88a3e8; --bar: #0b0e14; --plus: #3fd4a8; --minus: #ff7b7b; --gold: #e8b04e; color-scheme: dark }
 * { box-sizing: border-box }
-body { background: var(--bg); color: var(--fg); font: 15px/1.6 var(--body); margin: 0 }
-a { color: var(--accent) }
-.wrap { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 40px; max-width: 1180px; margin: 0 auto;
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px }
-.side { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; display: flex; flex-direction: column; gap: 2px; font-size: 14px }
-.side a { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 6px; color: var(--fg); text-decoration: none }
-.side a:hover, .side a:focus-visible { background: var(--tag); outline: none }
-.side a.on { background: var(--tag); font-weight: 600; box-shadow: inset 3px 0 0 var(--char, var(--accent)) }
-.side .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--char); flex: none }
-.navarch { margin-left: auto; color: var(--muted); font-size: 12px }
-.navh { margin: 14px 10px 4px; font: 600 11px/1 var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--muted) }
-main { min-width: 0 }
-h1, h2, h3 { font-family: var(--display); line-height: 1.1; text-wrap: balance; margin: 0 }
-h1 { font-size: 46px; font-weight: 800; letter-spacing: .01em }
-h1.big { font-size: clamp(44px, 7vw, 74px) }
-h2 { font-size: 26px; font-weight: 700; margin: 38px 0 12px; padding-top: 10px; border-top: 2px solid var(--line) }
-h3 { font-size: 19px; font-weight: 700; margin: 0 0 6px }
-.eyebrow { margin: 0 0 6px; font: 600 12px/1.3 var(--body); letter-spacing: .14em; text-transform: uppercase; color: var(--muted) }
-.lede { font-size: 17px; max-width: 62ch; color: var(--muted); margin: 10px 0 0 }
-.note { color: var(--muted); font-size: 13.5px; max-width: 72ch }
-.prose p, .prose li { max-width: 68ch }
-.prose ul { padding-left: 20px }
-.mono { font-family: var(--mono); font-variant-numeric: tabular-nums }
-.hero { padding: 6px 0 4px }
-.roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px }
-.rcard { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; column-gap: 12px; padding: 14px; background: var(--panel);
-  border: 1px solid var(--line); border-radius: 8px; color: var(--fg); text-decoration: none; border-top: 4px solid var(--char) }
-.rcard:hover, .rcard:focus-visible { border-color: var(--char); outline: none }
-.rcard .gn { grid-row: 1 / 4; font: 800 40px/1 var(--display); color: var(--char) }
-.rn { font: 700 18px/1.2 var(--display) } .ra { color: var(--muted); font-size: 13px } .rs { font-size: 12px; color: var(--muted) }
-.archs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px }
-.arch { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px }
-.arch p { margin: 0 0 8px } .arch .who { color: var(--accent); font-weight: 600; font-size: 13px; margin: 0 }
-.charhead { display: flex; gap: 18px; align-items: flex-start }
-.gate { flex: none; width: 74px; height: 86px; border-radius: 8px; background: var(--char); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center }
-.gate .gl { font: 600 11px/1 var(--body); letter-spacing: .15em; text-transform: uppercase; opacity: .85 }
-.gate .gn { font: 800 46px/1 var(--display) }
-.charhead h1 { color: var(--fg) }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0; margin: 22px 0 10px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel) }
-.stats div { padding: 10px 14px; border-right: 1px solid var(--line) } .stats div:last-child { border-right: 0 }
-.stats dt { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted) }
-.stats dd { margin: 2px 0 0; font: 600 18px/1.2 var(--mono); font-variant-numeric: tabular-nums }
-.traits { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 10px 0 0; list-style: none }
-.traits li { background: var(--tag); border-radius: 999px; padding: 3px 11px; font-size: 13px }
-.two { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 28px }
-.sw { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 18px; margin-top: 38px; align-self: start }
-.sw ul { margin: 0 0 12px; padding-left: 18px } .sw li { margin: 3px 0 }
-.tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); margin: 10px 0 14px }
-table { border-collapse: collapse; width: 100%; font-size: 14px }
-th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top }
-thead th { font: 600 11px/1.3 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); background: var(--tag); white-space: nowrap }
-tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0 }
-tbody th { font-weight: 600 }
-.fd td { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap }
-.fd td:nth-child(6) { font-family: var(--body) }
-.fd tbody th { white-space: nowrap }
-.ver { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 4px; background: var(--tag); font: 600 11px/18px var(--mono) }
-.plus { color: var(--plus); font-weight: 600 } .minus { color: var(--minus); font-weight: 600 } .even { color: var(--fg) }
-.kd { color: var(--gold); font-weight: 600 } .na { color: var(--muted) }
-.skills .mv, .combo .mv { font-weight: 600; display: block }
-.sub { display: block; color: var(--muted); font-size: 12.5px; font-weight: 400 }
-.inp { font-family: var(--mono); white-space: nowrap }
-.skills tr.super th .mv { color: var(--char) }
-.skills tr.follow th, .skills tr.follow td { padding-top: 0; font-size: 13px; color: var(--muted) }
-.combos { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px }
-.combo { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--char); border-radius: 8px; padding: 12px 16px }
-.combo .ch { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap }
-.combo .dmg { color: var(--muted); font-size: 13px }
-.combo .seq { font: 15px/1.7 var(--mono); margin: 4px 0 2px }
-.combo .sep { color: var(--muted) }
-.tag { display: inline-block; background: var(--tag); padding: 0 7px; border-radius: 4px; font: 12px/20px var(--body) }
-.tips li { margin: 4px 0; max-width: 70ch }
-.ctl td { font-family: var(--mono) }
-@media (max-width: 820px) {
-  .wrap { grid-template-columns: minmax(0, 1fr); gap: 18px; padding-block: 16px 48px }
-  .side { position: static; flex-direction: row; flex-wrap: wrap; gap: 4px }
-  .side .navh { display: none } .navarch { display: none }
-  .side a { padding: 5px 10px; background: var(--panel); border: 1px solid var(--line) }
-  .two { grid-template-columns: minmax(0, 1fr) } .sw { margin-top: 0 }
-  h1 { font-size: 38px }
-  .stats div { border-right: 0; border-bottom: 1px solid var(--line) }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14.5px/1.6 var(--sans) }
+a { color: var(--link); text-decoration: none } a:hover { text-decoration: underline }
+.topbar { background: var(--bar); color: var(--barink); padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)) }
+.topbar .in { max-width: 1240px; margin: 0 auto; display: flex; align-items: center; gap: 14px }
+.logo { font: 700 20px/1 var(--serif); color: #fff; letter-spacing: .01em; display: flex; align-items: center; gap: 8px } .logo span { color: #ffcf4a } .lgimg { height: 40px; width: auto; display: block }
+.homelogo { display: block; width: min(460px, 100%); height: auto; margin: 4px 0 10px }
+.badge { font: 12px var(--mono); color: #aab3cc } .badge:first-of-type { margin-left: auto }
+.wrap { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 18px; max-width: 1240px; margin: 0 auto;
+  padding: 18px max(16px, env(safe-area-inset-right, 0px)) 60px max(16px, env(safe-area-inset-left, 0px)) }
+.side { font-size: 13.5px; align-self: start; position: sticky; top: 12px }
+.portal { margin-bottom: 16px } .ph { margin: 0 0 4px; padding-bottom: 3px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted) }
+.side ul { list-style: none; margin: 0; padding: 0 } .side li { margin: 1px 0 }
+.side a { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 3px }
+.side a.on { background: var(--paper); font-weight: 700; color: var(--ink) }
+.ico { width: 24px; height: 24px; image-rendering: pixelated; flex: none }
+main { min-width: 0; background: var(--paper); border: 1px solid var(--line); padding: 20px 26px 40px; display: flow-root }
+.crumb { margin: 0; font-size: 12.5px; color: var(--muted) }
+.ptitle { font: 400 30px/1.25 var(--serif); margin: 2px 0 0; padding-bottom: 4px; border-bottom: 1px solid var(--line) }
+.tagline { margin: 4px 0 14px; font-size: 12.5px; color: var(--muted) }
+h2 { font: 400 23px/1.3 var(--serif); margin: 26px 0 10px; padding-bottom: 3px; border-bottom: 1px solid var(--line); clear: right }
+.char h2 { clear: none }
+h3 { font: 700 16px/1.4 var(--sans); margin: 20px 0 8px }
+p, li { max-width: 80ch }
+.note { color: var(--muted); font-size: 13px }
+.mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums }
+.welcome { background: var(--soft); border: 1px solid var(--line); padding: 10px 16px; margin-bottom: 8px }
+/* animated sprite strips */
+.spr { display: inline-block; width: var(--s); height: var(--s); background-repeat: no-repeat; background-size: calc(var(--n) * var(--s)) var(--s);
+  image-rendering: pixelated; animation: play var(--d) steps(var(--n)) infinite }
+.spr.big { --s: 192px } .spr.mid { --s: 128px }
+@keyframes play { to { background-position: calc(var(--n) * var(--s) * -1) 0 } }
+@media (prefers-reduced-motion: reduce) { .spr { animation: none } }
+.roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px }
+.rcard { display: flex; flex-direction: column; align-items: center; padding: 4px 8px 10px; border: 1px solid var(--line); background: var(--soft);
+  border-top: 4px solid var(--char); color: var(--ink) }
+.rcard:hover { text-decoration: none; border-color: var(--char) } .rcard .spr { margin: -6px 0 0 }
+.rn { font-weight: 700 } .ra { font-size: 12.5px; color: var(--muted) }
+/* infobox */
+.infobox { float: right; clear: right; width: 290px; margin: 0 0 14px 20px; border: 1px solid var(--line); background: var(--soft); font-size: 13px }
+.ibtitle { background: var(--char); color: #fff; text-align: center; font: 700 16px/1.2 var(--sans); padding: 7px; text-shadow: 0 1px 2px rgba(0,0,0,.35) }
+.ibport { display: flex; justify-content: center; background: linear-gradient(180deg, var(--paper), var(--soft)); border-bottom: 1px solid var(--line); padding: 4px 0 0 }
+.infobox table { width: 100%; border-collapse: collapse } .infobox th, .infobox td { padding: 5px 9px; border-top: 1px solid var(--line); text-align: left; vertical-align: top }
+.infobox th { width: 42%; background: var(--head); font-weight: 600 }
+.lead { margin-top: 0 }
+.toc { display: inline-block; border: 1px solid var(--line); background: var(--soft); padding: 8px 18px 8px 12px; font-size: 13.5px; margin: 4px 0 6px }
+.toch { margin: 0 0 2px; font-weight: 700; text-align: center } .toc ol { margin: 0; padding-left: 20px }
+.archline { background: var(--soft); border-left: 4px solid var(--char); padding: 8px 12px }
+.sw { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border: 1px solid var(--line); margin: 12px 0 }
+.sw > div { padding: 0 14px 8px } .sw ul { margin: 6px 0; padding-left: 18px }
+.swh { margin: 0 -14px; padding: 5px 14px; font-weight: 700; color: #fff }
+.pro .swh { background: #2f8a4c } .con .swh { background: #b8323a } .con { border-left: 1px solid var(--line) }
+/* move cards */
+.move { border: 1px solid var(--line); margin: 0 0 14px; background: var(--paper); clear: none }
+.mhead { display: flex; align-items: baseline; gap: 12px; background: var(--head); border-bottom: 1px solid var(--line); padding: 6px 12px; border-left: 4px solid var(--char) }
+.mhead h4 { margin: 0; font: 700 15.5px/1.3 var(--sans) }
+.minput { margin-left: auto; font: 700 14px var(--mono) } .arw { font-weight: 400; color: var(--muted); margin-left: 6px }
+.mbody { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 0 }
+.mimg { margin: 0; border-right: 1px solid var(--line); background: repeating-linear-gradient(45deg, var(--soft) 0 10px, var(--paper) 10px 20px); padding: 6px }
+.frame { position: relative; width: 100%; aspect-ratio: 330 / 270 }
+.frame img, .frame svg { position: absolute; inset: 0; width: 100%; height: 100% } .frame img { image-rendering: pixelated }
+.mimg figcaption { text-align: center; font-size: 11.5px; color: var(--muted) }
+.box .gl { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 4 }
+.box rect { stroke-width: 2 } .hi { fill: color-mix(in srgb, var(--hi) 22%, transparent); stroke: var(--hi) }
+.hu { fill: none; stroke: var(--hu); stroke-opacity: .85 } .gr { fill: color-mix(in srgb, var(--gr) 22%, transparent); stroke: var(--gr); stroke-dasharray: 6 4 }
+.pj { fill: color-mix(in srgb, var(--pj) 30%, transparent); stroke: var(--pj) } .rf { fill: color-mix(in srgb, var(--rf) 18%, transparent); stroke: var(--rf); stroke-dasharray: 6 4 }
+.k { display: inline-block; width: 12px; height: 10px; border: 2px solid; vertical-align: -1px }
+.k.hi, .k.hu, .k.gr { border-style: solid } .k.hi { border-color: var(--hi) } .k.hu { border-color: var(--hu) } .k.gr { border-color: var(--gr) }
+.mdata { padding: 10px 12px; min-width: 0 }
+.mnotes { margin: 8px 0 0; padding-left: 18px } .mnotes li { margin: 2px 0 }
+.hideboxes .box { display: none }
+/* tables */
+.tw { overflow-x: auto }
+table { border-collapse: collapse }
+.mft, .ctab, .atab, .tw > table { width: 100%; font-size: 13px }
+.tw th, .tw td { border: 1px solid var(--line); padding: 4px 8px; text-align: center; vertical-align: middle }
+.tw thead th { background: var(--head); font-weight: 700; white-space: nowrap }
+.mft td { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap } .mft td:nth-child(2), .mft .iv { font-family: var(--sans) } .mft .iv { white-space: normal; min-width: 70px }
+.mft tbody th { text-align: left; white-space: nowrap; font-weight: 600; background: var(--soft) }
+.ver { display: inline-block; min-width: 28px; text-align: center; padding: 0 5px; border-radius: 3px; background: var(--char); color: #fff; font: 700 11px/18px var(--mono) }
+.plus { color: var(--plus); font-weight: 700 } .minus { color: var(--minus); font-weight: 700 } .kd { color: var(--gold); font-weight: 700 } .na { color: var(--muted) }
+.ctab td:last-child, .atab td, .atab th { text-align: left } .cseq { text-align: left !important; font-family: var(--mono); white-space: nowrap }
+.sep { color: var(--muted) } .tag { background: var(--head); padding: 0 6px; border-radius: 3px; font: 12px var(--sans) }
+.ctl td { font-family: var(--mono) } .prose ul { padding-left: 20px }
+.eyebrow { margin: 0; font-size: 12.5px; color: var(--muted) }
+.view > h1:not(.ptitle) { font: 400 30px/1.25 var(--serif); margin: 2px 0 14px; padding-bottom: 4px; border-bottom: 1px solid var(--line) }
+.stgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-top: 12px }
+.stg { margin: 0; border: 1px solid var(--line); background: var(--soft) } .stg img { display: block; width: 100%; height: auto; image-rendering: pixelated }
+.stg figcaption { padding: 8px 12px; display: flex; flex-direction: column } .stg figcaption span { color: var(--muted); font-size: 13px }
+.toggle { float: right; font-size: 12.5px; color: var(--muted); margin-top: -6px }
+@media (max-width: 860px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); padding-top: 10px } .bld { display: none }
+  .side { position: static; display: flex; flex-wrap: wrap; gap: 4px 14px } .portal { margin: 0 } .ph { display: none }
+  .side ul { display: flex; flex-wrap: wrap; gap: 2px 8px }
+  main { padding: 14px 14px 32px }
+  .infobox { float: none; width: auto; margin: 0 0 14px }
+  .mbody { grid-template-columns: minmax(0, 1fr) } .mimg { border-right: 0; border-bottom: 1px solid var(--line) } .frame { max-width: 300px; margin: 0 auto }
+  .sw { grid-template-columns: minmax(0, 1fr) } .con { border-left: 0; border-top: 1px solid var(--line) }
 }
-@media (prefers-reduced-motion: no-preference) { .view:not([hidden]) { animation: rise .25s ease-out } @keyframes rise { from { transform: translateY(6px) } to { transform: none } } }
 """
 
 JS = """
 const views = [...document.querySelectorAll('.view')], links = [...document.querySelectorAll('[data-go]')];
-function show(id) {
-  if (!views.some(v => v.dataset.view === id)) id = 'home';
-  views.forEach(v => { v.hidden = v.dataset.view !== id; });
-  links.forEach(a => a.classList.toggle('on', a.dataset.go === id && a.closest('.side')));
-  window.scrollTo(0, 0);
+function show(h, push) {
+  const [id] = h.split('.');
+  const view = views.some(v => v.dataset.view === id) ? id : 'home';
+  views.forEach(v => { v.hidden = v.dataset.view !== view; });
+  links.forEach(a => a.classList.toggle('on', a.dataset.go === view && !!a.closest('.side')));
+  const el = h.includes('.') && document.getElementById(h);
+  if (el) el.scrollIntoView(); else window.scrollTo(0, 0);
 }
-links.forEach(a => a.addEventListener('click', e => { e.preventDefault(); const id = a.dataset.go; try { history.replaceState(null, '', '#' + id); } catch (err) {} show(id); }));
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[href^="#"]'); if (!a) return;
+  e.preventDefault(); const h = a.getAttribute('href').slice(1);
+  try { history.replaceState(null, '', '#' + h); } catch (err) {}
+  show(h);
+});
+const tg = document.getElementById('boxes');
+tg.addEventListener('change', () => { document.body.classList.toggle('hideboxes', !tg.checked); try { localStorage.setItem('umavs.wiki.boxes', tg.checked ? '1' : '0'); } catch (err) {} });
+try { if (localStorage.getItem('umavs.wiki.boxes') === '0') { tg.checked = false; document.body.classList.add('hideboxes'); } } catch (err) {}
 show((location.hash || '#home').slice(1));
 window.addEventListener('hashchange', () => show(location.hash.slice(1)));
 """
 
+stage_cards = ''.join(f'<figure class="stg"><img src="{x["img"]}" alt="{E(x["name"].title())}"><figcaption><b>{E(x["name"].title())}</b><span>{E(x["sub"].title().replace("M ·", "m ·"))}</span></figcaption></figure>' for x in STG)
+STAGESV = f"""
+<section class="view" id="v-stages" data-view="stages" hidden>
+  <h1 class="ptitle">Stages</h1>
+  <p class="tagline">From Uma Versus Wiki · build {BUILD}</p>
+  <p>You pick the course after character select, or choose <b>Random</b>. Every stage is the same size, so they're just for looks. Online, the host picks.</p>
+  <div class="stgs">{stage_cards}</div>
+</section>"""
+UPDATE18 = f"""
+<section class="view" id="v-update18" data-view="update18" hidden>
+  <h1 class="ptitle">Update 1.8</h1>
+  <p class="tagline">Patch notes · build {BUILD}</p>
+  <div class="prose">
+  <h2>1.8.1</h2>
+  <ul><li>The Sharp text option is now <b>Graphics: Low / Medium / High</b> in Options and the pause menu. Low is the original 960×540 picture, Medium is sharper, High is full resolution. Medium is the default.</li>
+  <li>Smoother frame pacing on 60 Hz screens, and less work per frame on 120 Hz and higher.</li>
+  <li>Fixed pressing A (Skill) to confirm a menu or unpause doing a skill as the match starts. A button that's still held from a menu is ignored until you let go.</li>
+  <li>Rewrote the wiki and in-game text.</li></ul>
+  <h2>Accounts</h2>
+  <ul><li>Added optional accounts. Sign up from <b>Account</b> on the main menu with an email, password, display name and favourite runner. Guests can still play everything.</li>
+  <li>Your display name shows up for your opponent online.</li>
+  <li>Controls, volume, options and trial progress save to your account and load when you sign in somewhere else.</li>
+  <li>Online matches are saved to your match history. The Account screen shows your record, win rate, most-played runner and recent results. VS CPU doesn't count.</li>
+  <li>The title screen shows who's signed in.</li></ul>
+  <p>Your email is only used to sign in. Display names, favourite runners and online results are public. Settings are private.</p>
+  <h2>Display</h2>
+  <ul><li>The game now renders at your screen's resolution, so text and menus are sharp. Sprites still look like pixel art.</li></ul>
+  <h2>Online</h2>
+  <ul><li>Both players need build <b class="mono">{BUILD}</b>.</li></ul>
+  </div>
+</section>"""
+UPDATE17 = f"""
+<section class="view" id="v-update17" data-view="update17" hidden>
+  <h1 class="ptitle">Update 1.7</h1>
+  <p class="tagline">Patch notes</p>
+  <div class="prose">
+  <h2>New</h2>
+  <ul><li>Uma Versus has a logo and a browser tab icon.</li></ul>
+  <h2>Daiwa Scarlet</h2>
+  <ul><li><b>Number One Finish</b> is now her own super: a volley of five golden roses and a big finishing rose instead of a rush. Each shot can hit, be blocked or miss on its own. About 2,300 damage if everything lands.</li>
+  <li>The shots go through normal projectiles, can't be reflected and don't use juggle points. Punishable on block up close.</li>
+  <li>The CPU uses it as a long-range punish.</li></ul>
+  <h2>Fixes</h2>
+  <ul><li>Fixed Gold Ship flying off the top of the screen when Golshi Dropkick!! was cancelled into a super in the air. Same for Suzuka's Silent Flicker.</li>
+  <li>Fixed matches getting stuck if a super cinematic was cut short, for example by time running out.</li>
+  <li>Fixed matches getting stuck if a projectile hit someone in the middle of a throw.</li>
+  <li>Fixed super cinematics near the edge pushing the opponent off the stage.</li>
+  <li>Fixed a crash when resetting Training during a super flash.</li>
+  <li>Super cinematics now use the character's damage multiplier and Miracle Mode, so Suzuka's and Teio's supers hit a little harder.</li></ul>
+  </div>
+</section>"""
+UPDATE16 = f"""
+<section class="view" id="v-update16" data-view="update16" hidden>
+  <h1 class="ptitle">Update 1.6</h1>
+  <p class="tagline">Patch notes</p>
+  <div class="prose">
+  <h2>New look</h2>
+  <ul><li>New race-day UI for all menus and the HUD: starting-gate colours, tote-board timers, saddlecloth name plates and rosettes for round wins.</li>
+  <li>Added a course select, a VS screen before each match and a results board after it.</li>
+  <li>Rounds start with the starting gate opening, and knockouts end in a photo finish.</li></ul>
+  <h2>Stages</h2>
+  <ul><li>Three new stages: Tracen Training Track, Nakayama Nights and Winning Live.</li></ul>
+  <h2>Music</h2>
+  <ul><li>Added a menu theme, a theme for every runner and a Third Round Theme.</li>
+  <li>P1 picks the battle theme after the course. It defaults to P1's runner. Online, the host picks.</li>
+  <li>If a match goes to round 3, the Third Round Theme takes over.</li>
+  <li>Music and effects volume are in Options, and you can listen to every track there.</li></ul>
+  <h2>Combos</h2>
+  <ul><li>New damage scaling based on the starter, with a 13% drop per hit from the 3rd hit (minimum 25%, supers 50%).</li>
+  <li>Added ground bounce (j.H in an air combo) and wall bounce (some EX knockdowns), once each per combo.</li>
+  <li>Juggle points, hitstun decay after 2 seconds, and a combo limit of 32 hits or 7 seconds.</li>
+  <li>The combo counter shows the scaling for the next hit.</li></ul>
+  <h2>Training</h2>
+  <ul><li>New Combo Trials mode with 51 trials and demos.</li>
+  <li>Input display, frame meter and dummy recording in Training.</li></ul>
+  <h2>CPU</h2>
+  <ul><li>Rebuilt the CPU. Four levels: Rookie, Normal, Hard and G1.</li>
+  <li>It reacts with a delay instead of reading your inputs, and guesses when blocking, so mixups work on it.</li>
+  <li>Higher levels do real combos, punish, anti-air, tech throws and get around projectiles.</li>
+  <li>Each runner plays to her archetype.</li></ul>
+  <h2>Quality of life</h2>
+  <ul><li>Rematch from the results screen.</li>
+  <li>Random slot on character select, and cursors remember your last pick.</li>
+  <li>Reduce flashes &amp; shake and fullscreen options.</li>
+  <li>The online room panel works with a gamepad.</li>
+  <li>Menu sounds, plus a bell and gate sound at the start of each round.</li></ul>
+  <h2>Fixes</h2>
+  <ul><li>The CPU could super while airborne or right out of hitstun.</li>
+  <li>Supers at the end of a combo sometimes only did the first hit.</li>
+  <li>The menu music didn't start until you opened a menu.</li>
+  <li>Leaving a match during a KO could skip a round win in the next match.</li>
+  <li>Some of Teio's frames had a green square behind her.</li></ul>
+  </div>
+</section>"""
+
 page = f"""<title>Uma Versus Wiki</title>
+<link rel="icon" type="image/png" href="{ICON}">
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=Saira+Condensed:wght@700;800&display=swap">
 <style>{CSS}</style>
+<header class="topbar"><div class="in"><span class="logo"><img class="lgimg" src="{LOGO}" alt="Uma Versus"> Wiki</span>
+  <label class="badge"><input type="checkbox" id="boxes" checked> hitboxes</label><span class="badge bld">build {BUILD}</span></div></header>
 <div class="wrap">
-{nav()}
+{side()}
 <main>
-{HOME}
+{HOME2}
 {SYSTEMS}
 {''.join(char_page(cid, i) for i, cid in enumerate(ORDER, 1))}
+{STAGESV}
+{UPDATE18}
+{UPDATE17}
+{UPDATE16}
 {UPDATE15}
 {UPDATE}
 </main>

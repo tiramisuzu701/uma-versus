@@ -1,6 +1,4 @@
-// ============================================================================
-//  INPUT, CPU, AUDIO, MENUS, LOOP
-// ============================================================================
+// Input, sound effects, menus and the main loop.
 'use strict';
 
 // ------------------------------------------------------------------ keyboard / gamepad (remappable)
@@ -147,11 +145,12 @@ const Sfx = {
 
 // ------------------------------------------------------------------ menus
 const UI = { screen: 'title', modeIdx: 0, sel: [0, 1], selDone: [false, false], pauseIdx: 0, paused: false, movesChar: 0, t: 0, back: 'mode' };
-const MODES = [['VERSUS', 'versus', 'Two players, one keyboard or two gamepads'], ['ONLINE', 'online', 'Play a friend over the internet with a room code (rollback netcode)'], ['VS CPU', 'cpu', 'Fight the computer'], ['TRAINING', 'training', 'Hitboxes, frame advantage, dummy settings'], ['REPLAYS', 'replays', 'Watch your recent matches or load a replay file'], ['COMBO TRIALS', 'trials', 'Learn each runner\'s combos, with demos'], ['MOVE LIST', 'moves', 'Every move for every runner'], ['CONTROLS', 'controls', 'Keyboard and gamepad layout'], ['OPTIONS', 'sound', 'Volume, reduce flashes, fullscreen, and every music track'], ['ACCOUNT', 'account', 'Optional: your name online, cloud save and match history']];
+const MODES = [['VERSUS', 'versus', 'Two players, one keyboard or two gamepads'], ['ONLINE', 'online', 'Play a friend over the internet with a room code'], ['VS CPU', 'cpu', 'Fight the computer'], ['TRAINING', 'training', 'Hitboxes, frame advantage, dummy settings'], ['REPLAYS', 'replays', 'Watch your recent matches or load a replay file'], ['COMBO TRIALS', 'trials', 'Learn each runner\'s combos, with demos'], ['MOVE LIST', 'moves', 'Every move for every runner'], ['CONTROLS', 'controls', 'Keyboard and gamepad layout'], ['OPTIONS', 'sound', 'Volume, display settings and the music player'], ['ACCOUNT', 'account', 'Sign in to save your settings and track online matches']];
 const ROSTER = ['spe', 'suz', 'gs', 'vo', 'ds', 'mm', 'tt', 'kb'];
 let cpuLevel = 2;
 
 let prevMenu = [{ ...NEUTRAL }, { ...NEUTRAL }];
+const BTN_LATCH = [{}, {}];
 function menuEdges(i, cur) {
   const p = prevMenu[i], e = {};
   for (const k in NEUTRAL) e[k] = cur[k] && !p[k];
@@ -174,6 +173,14 @@ function tick() {
   const conf = i => me[i].L || me[i].S;
   const back = i => me[i].H;
   const anyConf = conf(0) || conf(1) || enter;
+  // A button still held from a menu (confirm, unpause, rematch) shouldn't count as a press once the
+  // match is live, or gamepad A (Skill) fires a skill on the first frame. Ignore it until it's released.
+  const live = UI.screen === 'game' && !UI.paused && G.phase !== 'match' && !(G.mode === 'online' && Net.menu);
+  for (const i of [0, 1]) for (const k of ['L', 'M', 'H', 'S']) {
+    if (!raw[i][k]) BTN_LATCH[i][k] = false;
+    else if (!live) BTN_LATCH[i][k] = true;
+    else if (BTN_LATCH[i][k]) raw[i][k] = 0;
+  }
 
   if (UI.screen === 'title') {
     if (anyConf || esc) { UI.screen = 'mode'; Sfx.play('ok'); }
@@ -266,7 +273,7 @@ function tick() {
       Music.save();
     }
     if ((e.l || e.r || e.L || e.S || enter) && r.k === 'calm') { SET.calm = !SET.calm; saveSet(); Sfx.play('menu'); }
-    if ((e.l || e.r || e.L || e.S || enter) && r.k === 'sharp') { SET.sharp = !SET.sharp; saveSet(); fit(); Sfx.play('menu'); }
+    if ((e.l || e.r || e.L || e.S || enter) && r.k === 'gfx') { cycleGfx(e.l ? -1 : 1); Sfx.play('menu'); }
     if ((e.L || e.S || enter) && r.k === 'full') { toggleFullscreen(); Sfx.play('menu'); }
     if (e.L || e.S || enter) {
       if (r.k === 'track') { MD.jukebox = r.id; Music.play(r.id, 0.4, 0.5, true); Sfx.play('ok'); }
@@ -424,6 +431,7 @@ function pauseItems() {
   items.push([`Music: ${Math.round(Music.vol * 100)}%`, () => { Music.vol = Music.vol >= 1 ? 0 : Math.round((Music.vol + 0.25) * 4) / 4; Music.save(); }]);
   items.push([`Effects: ${Sfx.muted ? 'off' : 'on'}`, () => { Sfx.muted = !Sfx.muted; }]);
   items.push([`Reduce flashes: ${SET.calm ? 'on' : 'off'}`, () => { SET.calm = !SET.calm; saveSet(); }]);
+  items.push([`Graphics: ${SET.gfx}`, () => cycleGfx(1)]);
   items.push(['Fullscreen', () => toggleFullscreen()]);
   items.push(['Move list', () => { UI.screen = 'moves'; UI.back = 'game'; UI.movesChar = ROSTER.indexOf(G.p[0].cid); UI.movesPage = 0; }]);
   items.push(['Controls', () => { UI.screen = 'controls'; UI.back = 'game'; UI.ctl = null; }]);
@@ -507,20 +515,27 @@ function renderScreen() {
 // ------------------------------------------------------------------ loop
 let acc = 0, last = performance.now();
 function loop(now) {
-  acc += Math.min(250, now - last); last = now;
   const dt = 1000 / 60;
-  while (acc >= dt) { tick(); acc -= dt; }
-  render();
+  let el = Math.min(250, now - last); last = now;
+  // on a 60 Hz screen frames arrive every ~16.7 ms give or take a millisecond. Treat those as exactly one
+  // tick, otherwise the jitter sometimes gives 0 ticks then 2 and the game visibly hitches.
+  if (Math.abs(el - dt) < 1.5) el = dt;
+  acc += el;
+  let n = 0;
+  while (acc >= dt - 0.5 && n < 4) { tick(); acc -= dt; n++; }
+  if (n === 4) acc = 0;   // way behind (tab was hidden, slow machine): don't try to catch up
+  if (n > 0) render();    // nothing changed since the last picture, so skip redrawing (saves work on 120 Hz+ screens)
   requestAnimationFrame(loop);
 }
+function cycleGfx(d) { SET.gfx = GFX[(GFX.indexOf(SET.gfx) + d + GFX.length) % GFX.length]; saveSet(); fit(); }
 function fit() {
   const s = Math.min(innerWidth / W, innerHeight / HGT);
   cv.style.width = Math.floor(W * s) + 'px'; cv.style.height = Math.floor(HGT * s) + 'px';
-  // draw at the real pixel size of the window (sharp text), capped so huge screens stay fast
-  const r = SET.sharp ? Math.min(2560 / W, Math.max(1, Math.floor(W * s * (window.devicePixelRatio || 1)) / W)) : 1;
+  // render at native resolution (capped at 2560 wide)
+  const r = Math.min((GFX_W[SET.gfx] || 1440) / W, Math.max(1, Math.floor(W * s * (window.devicePixelRatio || 1)) / W));
   if (Math.abs(r - RES) > 0.001 || cv.width !== Math.round(W * r)) {
     RES = r; cv.width = Math.round(W * r); cv.height = Math.round(HGT * r);
-    ctx.imageSmoothingEnabled = false;   // resizing a canvas resets its drawing state
+    ctx.imageSmoothingEnabled = false;
   }
 }
 if (window.matchMedia) try { matchMedia('(resolution: 1dppx)').addEventListener('change', fit); } catch (e) { }

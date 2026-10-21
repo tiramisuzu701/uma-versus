@@ -1,13 +1,13 @@
-const VERSION = '1.8';   // shown on the title screen and main menu (cosmetic; not part of BUILD)
-// ============================================================================
-//  UI  —  "race day" look: starting-gate colours, tote-board LED text,
-//  saddlecloth name plates, rosettes for round wins. Menus + in-game HUD.
-// ============================================================================
+const VERSION = '1.8.1';
+// Menus and HUD. The look is race day: gate colours, tote-board LED text,
+// saddlecloth name plates, rosettes for round wins.
 'use strict';
 
 const SET_KEY = 'umavs.settings';
-const SET = { calm: false, sharp: true };   // sharp: draw at the screen's resolution (off = classic 960x540)
+const SET = { calm: false, gfx: 'medium' };   // gfx: low = 960x540, medium = up to 1440 wide, high = up to 2560 wide
 try { Object.assign(SET, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (e) { }
+if ('sharp' in SET) { if (SET.sharp === false) SET.gfx = 'low'; delete SET.sharp; }   // old 1.8 setting
+const GFX = ['low', 'medium', 'high'], GFX_W = { low: 960, medium: 1440, high: 2560 };
 function saveSet() { try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (e) { } }
 const FD = '"Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif';
 const PAL = {
@@ -71,7 +71,7 @@ function ledText(str, x, y, dot, col = PAL.led, align = 'center', offCol = null)
   let c = ledCache.get(key);
   if (!c) {
     const pitch = dot * 1.25, cw = 6 * pitch, pad = dot * 2;
-    const lw = Math.ceil(str.length * cw + pad * 2), lh = Math.ceil(7 * pitch + pad * 2);   // drawn at screen resolution
+    const lw = Math.ceil(str.length * cw + pad * 2), lh = Math.ceil(7 * pitch + pad * 2);
     c = canvasOf(Math.ceil(lw * RES), Math.ceil(lh * RES)); c.lw = lw; c.lh = lh;
     const x2 = c.getContext('2d'); x2.scale(RES, RES);
     for (const pass of [0, 1]) {
@@ -158,7 +158,6 @@ function faceOf(cid, alt, flip) {
   return (FACES[key] = c);
 }
 function face(cid, alt, x, y, size, flip) { ctx.imageSmoothingEnabled = false; ctx.drawImage(faceOf(cid, alt, flip), x, y, size, size); }
-function portrait(cid, alt, x, y, size, flip) { face(cid, alt, x, y, size, flip); }   // kept for older callers
 
 // ---------------------------------------------------------------- shared backdrop
 function menuBg(dim = 0.55) {
@@ -222,10 +221,10 @@ function drawTitle() {
 
 // ---------------------------------------------------------------- main menu ("race programme")
 const MODE_META = { account: '', versus: '2P · SAME SCREEN', online: 'ROLLBACK', cpu: '', training: 'FREE RUN', replays: '', trials: '', moves: '8 RUNNERS', controls: 'KEYS · PADS', sound: 'VOLUME · TRACKS' };
-const TIPS = ['Hold back to block, even straight out of a dash', 'motion + H is the EX version of a skill: it costs 50 Spurt',
+const TIPS = ['Hold back to block, even straight out of a dash', 'Motion + H does the EX version of a skill for 50 Spurt',
   'Mash L for an auto-combo: 5L › 5M › 5H › skill', 'Teio\'s skills chain into each other on hit', 'McQueen deals PUNISH! damage to anyone caught recovering',
   'Vodka\'s Full Throttle is a hard knockdown: no quick rise', 'Daiwa can keep two shots on screen', 'Kitasan\'s Matsuri Uppercut is fully invincible',
-  'Gold Ship can dash-cancel her normals for 10 Spurt', 'Suzuka is the only runner with an air dash', 'Throw with L+M: it beats blocking',
+  'Gold Ship can dash-cancel her normals for 10 Spurt', 'Suzuka is the only runner with an air dash', 'L+M is a throw. Throws beat blocking',
   'Counter Spurt: S+H while blocking, for 50 Spurt', 'Press ` in a match to show hitboxes', 'Replays are saved automatically after every match'];
 function ticker(y) {
   ctx.fillStyle = 'rgba(8,11,28,.92)'; ctx.fillRect(0, y, W, 28);
@@ -745,7 +744,7 @@ function drawNetSelect() {
     panel(W / 2 - 330, 220, 660, 96, PAL.p2);
     txt('DIFFERENT GAME VERSIONS', W / 2, 248, 26, '#fff');
     label(`You have build ${BUILD}, your friend has build ${Net.theirBuild}.`, W / 2, 276, 15, '#ffd6dc', 'center', 700);
-    label('Matches would desync: make sure you both open the same file.', W / 2, 298, 15, '#ffd6dc', 'center', 700);
+    label('You both need the same version. Grab the latest copy and try again.', W / 2, 298, 15, '#ffd6dc', 'center', 700);
   } else if (!Net.theirBuild) label('checking versions…', W / 2, 206, 14, '#cfd3ea', 'center', 700);
   hintBar(Net.role === 'host' ? (Net.myReady ? '↑ ↓ runner / course / music    ·    ← → change    ·    H unlock runner    ·    waiting for your friend…' : '↑ ↓ runner / course / music    ·    ← → change    ·    F / Enter lock in    ·    Esc leave')
     : (Net.myReady ? 'Waiting for your friend…    ·    H to change' : '← → choose    ·    F / J / Enter lock in    ·    Esc leave'));
@@ -790,8 +789,8 @@ function drawMusicSelect() {
   hintBar('← → choose (preview plays)    ·    F / Enter confirm    ·    H / Esc back to courses');
 }
 
-// ---------------------------------------------------------------- sound test / audio options
-const SOUND_ROWS = () => [{ k: 'music', label: 'Music volume' }, { k: 'sfx', label: 'Effects volume' }, { k: 'calm', label: 'Reduce flashes & shake' }, { k: 'full', label: 'Fullscreen' }, { k: 'sharp', label: 'Sharp text (high resolution)' }, ...['menu', ...THEME_IDS, 'round3'].map(id => ({ k: 'track', id, label: TRACK_TITLE(id) })), { k: 'back', label: 'Back' }];
+// ---------------------------------------------------------------- options
+const SOUND_ROWS = () => [{ k: 'music', label: 'Music volume' }, { k: 'sfx', label: 'Effects volume' }, { k: 'calm', label: 'Reduce flashes & shake' }, { k: 'full', label: 'Fullscreen' }, { k: 'gfx', label: 'Graphics' }, ...['menu', ...THEME_IDS, 'round3'].map(id => ({ k: 'track', id, label: TRACK_TITLE(id) })), { k: 'back', label: 'Back' }];
 function drawSound() {
   menuBg(0.82);
   topBar('OPTIONS', 'saved in this browser');
@@ -806,9 +805,12 @@ function drawSound() {
       const v = r.k === 'music' ? Music.vol : Sfx.vol;
       meterBar(300, y - 7, 200, 14, Math.round(v * 5), PAL.turf);
       label(`${Math.round(v * 100)}%`, 548, y, 15, col, 'right', 800, true);
-    } else if (r.k === 'calm' || r.k === 'full' || r.k === 'sharp') {
+    } else if (r.k === 'gfx') {
       label(r.label, 70, y, 17, col, 'left', 800, true);
-      label((r.k === 'calm' ? SET.calm : r.k === 'sharp' ? SET.sharp : document.fullscreenElement) ? 'ON' : 'OFF', 548, y, 15, col, 'right', 900, true);
+      label((sel ? '◀ ' : '') + SET.gfx.toUpperCase() + (sel ? ' ▶' : ''), 548, y, 15, col, 'right', 900, true);
+    } else if (r.k === 'calm' || r.k === 'full') {
+      label(r.label, 70, y, 17, col, 'left', 800, true);
+      label((r.k === 'calm' ? SET.calm : document.fullscreenElement) ? 'ON' : 'OFF', 548, y, 15, col, 'right', 900, true);
     } else if (r.k === 'track') {
       const playing = MD.jukebox === r.id && Music.cur === r.id;
       label((playing ? '♪ ' : '') + r.label, 70, y, 17, playing && !sel ? PAL.gold : col, 'left', 800, true);
@@ -830,11 +832,11 @@ function drawSound() {
   hintBar('↑ ↓ choose    ·    ← → change volume    ·    F / Enter play a track    ·    Esc back');
 }
 
-// ---------------------------------------------------------------- account (Update 1.8)
+// ---------------------------------------------------------------- account
 function drawAccount() {
   menuBg(0.72);
   topBar('ACCOUNT', acctOn() ? 'signed in · settings saved to your account' : ACCT.on ? 'playing as a guest' : 'accounts are off in this copy');
-  if (!acctOn()) { hintBar('Tab / click to move between boxes    ·    Enter to confirm    ·    Esc back'); return; }
+  if (!acctOn()) { hintBar('Tab or click to switch boxes    ·    Enter to confirm    ·    Esc back'); return; }
   const p = ACCT.profile, st = ACCT.stats || {}, fav = (p && p.fav_runner) || 'spe', c = CHARS[fav];
   // ---- profile card
   panel(30, 60, 400, 412, c.color);
@@ -877,7 +879,7 @@ function drawAcctChip() {
   const n = acctName();
   slant(-10, 10, 230, 28, 10, 'rgba(8,11,28,.78)');
   if (n) { face(ACCT.profile.fav_runner, 0, 10, 12, 24); label(n, 40, 25, 16, '#fff', 'left', 900, true); }
-  else label('GUEST  ·  sign in from ACCOUNT', 14, 25, 13, PAL.dim, 'left', 800, true);
+  else label('GUEST', 14, 25, 13, PAL.dim, 'left', 800, true);
 }
 // online: show account names instead of P1/P2 when we have them
 function netName(side) { if (G.mode !== 'online' && UI.screen !== 'netselect') return null; return side === Net.side ? acctName() : (Net.theirWho && Net.theirWho.name) || null; }

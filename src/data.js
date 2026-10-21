@@ -1,11 +1,8 @@
-// ============================================================================
-//  CHARACTER DATA  —  tweak frame data here while playtesting.
-//  All timings are in frames (60 fps). Boxes are [forward, up, width, height]
-//  in pixels, measured from the fighter's feet (negative "up" = above ground).
-//  seq entries: [spriteFrame, duration, optionalAnimId]
-//  hits:  f:[firstActive,lastActive], dmg, hs (hitstun), bs (blockstun),
-//         guard: 'mid' | 'low' | 'high', launch:[vx,vy], kd (knockdown)
-// ============================================================================
+// Character data. Frames are at 60 fps. Boxes are [forward, up, width, height]
+// in pixels from the fighter's feet (negative up = above the ground).
+// seq: [spriteFrame, duration, animId?]
+// hits: f:[first, last], dmg, hs (hitstun), bs (blockstun), guard 'mid'|'low'|'high',
+//       launch:[vx, vy], kd (knockdown)
 'use strict';
 
 const H = o => Object.assign({ dmg: 500, hs: 16, bs: 10, push: 6, lvl: 1, guard: 'mid' }, o);
@@ -81,7 +78,7 @@ function barrage(n, mul, finalBs) {
   hits.push(H({ f: [f + 4, f + 7], box: [15, -150, 90, 100], dmg: Math.round(420 * mul), hs: 22, bs: finalBs, lvl: 2, push: 7, kd: true, launch: [6, -6] }));
   return { seq, hits };
 }
-// Dropkick arc. Not invincible — only upper-body invulnerable to air attacks.
+// Dropkick arc. Not invincible, but the upper body beats air attacks.
 function dropkick(sp, mul) {
   return {
     seq: [[3, 4, '162'], [0, 4, '160'], [3, 14, '163'], [0, 12, '139'], [2, 10, '139']],
@@ -133,10 +130,10 @@ function riposte(d1, d2, extra) {
 }
 
 const CHARS = {
-  // ---------------------------------------------------------------- SPECIAL WEEK — ALL-ROUNDER
+  // ---- Special Week (all-rounder)
   spe: {
     name: 'SPECIAL WEEK', short: 'SPE', arch: 'ALL-ROUNDER', color: '#e45ba8', color2: '#ffd1ea',
-    blurb: 'All-rounder. A fireball, an uppercut, an advancing spin and an armored tackle. A bit of everything.',
+    blurb: 'All-rounder. Has a fireball, an uppercut, an advancing spin kick and an armored tackle.',
     hp: 10000, walk: 3.2, back: 2.7, dash: 8.8, jumpV: -15, jumpX: 4.3, grav: 0.75,
     throwAnim: '840', win: '600', winFrames: 8, intro: '940',
     look: {
@@ -185,10 +182,10 @@ const CHARS = {
     }),
   },
 
-  // -------------------------------------------------------------- SILENCE SUZUKA — HIT AND RUN
+  // ---- Silence Suzuka (hit and run)
   suz: {
     name: 'SILENCE SUZUKA', short: 'SUZ', arch: 'HIT AND RUN', color: '#3fbf6a', color2: '#ffb38a',
-    blurb: 'Hit and run. Get in, hit hard, get out. Big damage, great escapes, low health.',
+    blurb: 'Hit and run. Lands one big hit and gets out before you can answer, but has low health.',
     hp: 8500, walk: 3.5, back: 3.2, dash: 10, jumpV: -15.2, jumpX: 4.8, grav: 0.78,
     airDash: true, backdash: { vx: 9, vy: -5.5, inv: 6, total: 22 }, dmgMul: 1.1,
     throwAnim: '850', win: '210', winFrames: 4, intro: '940',
@@ -262,7 +259,7 @@ const CHARS = {
     }),
   },
 
-  // -------------------------------------------------------------- GOLD SHIP — RUSHDOWN
+  // ---- Gold Ship (rushdown)
   gs: {
     name: 'GOLD SHIP', short: 'GS', arch: 'RUSHDOWN', color: '#e0442f', color2: '#ffe08a',
     blurb: 'Rushdown. Fastest normals, a command dash with mixups, and the legendary dropkick.',
@@ -335,10 +332,10 @@ const CHARS = {
     }),
   },
 
-  // -------------------------------------------------------------- VODKA — VORTEX
+  // ---- Vodka (vortex)
   vo: {
     name: 'VODKA', short: 'VOD', arch: 'VORTEX', color: '#1fb5a3', color2: '#c9fff4',
-    blurb: 'Vortex. Score a hard knockdown, then make them guess: in front, behind, high, low or grab.',
+    blurb: 'Vortex. Gets a hard knockdown, then makes you guess high, low, left, right or throw.',
     hp: 9500, walk: 3.3, back: 2.7, dash: 9.2, jumpV: -14.8, jumpX: 4.4, grav: 0.78,
     throwAnim: '840', win: '600', winFrames: 8, intro: '940', ai: 'vortex',
     look: {
@@ -355,10 +352,10 @@ const CHARS = {
       },
     },
     combos: [
-      { name: 'Hard knockdown', seq: '2L 2M 236M', note: 'Full Throttle: no quick rise, so set up your mixup' },
+      { name: 'Hard knockdown', seq: '2L 2M 236M', note: 'Full Throttle is a hard knockdown, so you get a free mixup' },
       { name: 'Cross-up starter', seq: 'j.M 5M 5H 236M', note: 'j.M hits on either side of a crouching opponent' },
       { name: 'Launcher air combo', seq: '5M 5H jc j.M j.H', note: 'Jump-cancel the second hit of 5H' },
-      { name: 'Rev Kick ender', seq: '2M 623M', note: 'Rev Kick launches; it also beats jump-ins, but it is not invincible' },
+      { name: 'Rev Kick ender', seq: '2M 623M', note: 'Rev Kick launches. It beats jump-ins but isn\'t invincible' },
     ],
     moves: baseNormals({
       // cross-up air normals: the boxes reach behind her
@@ -395,10 +392,10 @@ const CHARS = {
     }),
   },
 
-  // -------------------------------------------------------------- DAIWA SCARLET — ZONER
+  // ---- Daiwa Scarlet (zoner)
   ds: {
     name: 'DAIWA SCARLET', short: 'DAI', arch: 'ZONER', color: '#e2304a', color2: '#ffd7df',
-    blurb: 'Zoner. Shots straight, up, low and from the air, plus a barrier that reflects. Low damage up close.',
+    blurb: 'Zoner. Shoots straight, up, low and from the air, and has a reflector. Weak up close.',
     hp: 9000, walk: 3.0, back: 2.9, dash: 7.8, jumpV: -15.2, jumpX: 4.2, grav: 0.76,
     projMax: 2, backdash: { vx: 8.5, vy: -5, inv: 5, total: 22 }, dmgMul: 0.88,
     throwAnim: '850', win: '210', winFrames: 4, intro: '940', ai: 'zoner',
@@ -455,8 +452,7 @@ const CHARS = {
         proj: { style: 'rose', vx: 6, vy: 5, y0: -70, x0: 30, life: 80, box: [-22, -22, 44, 44], hit: H({ dmg: 450, hs: 16, bs: 10, lvl: 1, guard: 'high', chip: 0.1 }) },
         v: { L: { proj: { vx: 8, vy: 3 } } },
         ex: { note: 'Two shots', ev: { 6: 'proj', 11: 'proj2' }, proj2: { style: 'rose', vx: 8, vy: 3, y0: -70, x0: 30, life: 80, box: [-22, -22, 44, 44], hit: H({ dmg: 450, hs: 16, bs: 10, lvl: 1, guard: 'high', chip: 0.1 }) } } },
-      // Number One Finish: not a rush. A volley of five golden roses, then a big finishing rose.
-      // Every shot is its own projectile, so each one can be blocked, hit or miss on its own.
+      // Number One Finish: five shots and a big finisher, each its own projectile
       'SU': { kind: 'super', name: 'Number One Finish', input: 'S + H (full Spurt)', inv: [1, 20],
         seq: [[0, 6, '950'], [1, 7, '950'],
               [1, 2, '802'], [2, 3, '802'], [1, 2, '802'], [2, 3, '802'], [1, 2, '802'], [2, 3, '802'], [1, 2, '802'], [2, 3, '802'], [1, 2, '802'], [2, 3, '802'],
@@ -472,7 +468,7 @@ const CHARS = {
     }),
   },
 
-  // -------------------------------------------------------------- MEJIRO McQUEEN — BAIT AND PUNISH
+  // ---- Mejiro McQueen (bait and punish)
   mm: {
     name: 'MEJIRO McQUEEN', short: 'McQ', arch: 'BAIT AND PUNISH', color: '#9b7bf0', color2: '#efe6ff',
     blurb: 'Bait and punish. Long pokes, a counter stance, and extra damage on anyone caught recovering.',
@@ -532,7 +528,7 @@ const CHARS = {
     }),
   },
 
-  // -------------------------------------------------------------- TOKAI TEIO — GLASS CANNON
+  // ---- Tokai Teio (glass cannon)
   // 991-998 are Teio's own extra frames (unnamed in her sprite pack) split into short animations:
   // 991 point/hop · 992 lunge punch · 993 uppercut · 994 run · 995 crouch · 996/997 punch strings · 998 victory V
   tt: {
@@ -556,7 +552,7 @@ const CHARS = {
     combos: [
       { name: 'Step chain', seq: '5M 236M 214M', note: 'Teio Step hits, then chain straight into Imperial Rush' },
       { name: 'Low into rise', seq: '2L 2M 214M 623M', note: 'Imperial Rush launches, Emperor\'s Rise follows them up' },
-      { name: 'Full chain', seq: '5L 5M 5H 236M 214M 623M', note: 'Three specials in one combo: each one only once' },
+      { name: 'Full chain', seq: '5L 5M 5H 236M 214M 623M', note: 'Each special can only be used once per combo' },
       { name: 'Launcher air combo', seq: '2M 2H jc j.M j.H', note: 'Jump-cancel the launcher' },
     ],
     moves: baseNormals({
@@ -597,10 +593,10 @@ const CHARS = {
     }),
   },
 
-  // -------------------------------------------------------------- KITASAN BLACK — SHOTO
+  // ---- Kitasan Black (shoto)
   kb: {
     name: 'KITASAN BLACK', short: 'KIT', arch: 'SHOTO', color: '#e0402e', color2: '#ffe3a0',
-    blurb: 'Shoto. The textbook kit: a fireball, an invincible uppercut, a spinning kick (also in the air) and a step-in punch.',
+    blurb: 'Shoto. Fireball, invincible uppercut, a spin kick that also works in the air, and a step-in punch.',
     hp: 10000, walk: 3.2, back: 2.7, dash: 9.0, jumpV: -15, jumpX: 4.4, grav: 0.76,
     throwAnim: '840', win: '600', winFrames: 8, intro: '940',
     look: {
@@ -710,7 +706,7 @@ function autoFx(m) {
 }
 for (const [cid, c] of Object.entries(CHARS)) {
   c.look = { ...LOOK_DEFAULT, ...(c.look || {}) };
-  // taunt (Guard + S): loops the look.taunt animation for ~50 frames, small Spurt reward
+  // taunt (L+H): loops look.taunt for ~50 frames and gives a little Spurt
   const n = (typeof ASSETS !== 'undefined' && ASSETS[cid] && ASSETS[cid].anims[c.look.taunt]) ? ASSETS[cid].anims[c.look.taunt][1] : 2;
   const seq = []; let tt = 0;
   while (tt < 48) for (let i = 0; i < n && tt < 48; i++) { seq.push([i, 6]); tt += 6; }

@@ -1,8 +1,5 @@
-// ============================================================================
-//  REPLAYS
-//  The sim is deterministic, so a replay is just: build id, characters, and
-//  both players' input bytes for every simulated frame (2 bytes / frame).
-// ============================================================================
+// Replays. The sim is deterministic, so a replay is just the build id, the
+// characters and both players' inputs for every frame.
 'use strict';
 
 const REPLAY_KEY = 'umavs.replays';
@@ -64,7 +61,7 @@ function downloadReplay(r) {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     toast('Replay saved to your downloads');
-  } catch (e) { toast('Could not download here — open the game in a normal browser tab'); }
+  } catch (e) { toast('Downloads are blocked here. Open the game in a normal browser tab.'); }
 }
 function pickReplayFile() {
   const inp = document.getElementById('repFile');
@@ -92,7 +89,7 @@ function playReplay(r) {
   const raw = b64ToBytes(r.data);
   const vals = r.v >= 2 ? raw.filter((_, i) => i % 2 === 0).map((lo, i) => lo | (raw[i * 2 + 1] << 8)) : raw;
   Object.assign(RP, { rep: r, frames: vals, idx: 0, speed: 1, paused: false, acc: 0, snaps: {}, n: r.nframes,
-    warn: r.build !== BUILD ? `Recorded on build ${r.build} (you have ${BUILD}) — it may play back differently` : '' });
+    warn: r.build !== BUILD ? `Recorded on build ${r.build} (you have ${BUILD}), so it may not play back right` : '' });
   startMatch('replay', r.c[0], r.c[1]);
   G.stage = r.stage || 0; G.music = r.music || r.c[0];
   RP.snaps[0] = snapshot();
