@@ -32,3 +32,6 @@ The wiki has the full guide, frame data for every move and all the combos: https
 - Fonts: Barlow Condensed and Dela Gothic One, SIL Open Font License 1.1 (see `vendor/fonts/`).
 - Netcode: PeerJS, MIT License (see `vendor/`).
 - Accounts: supabase-js, MIT License (see `vendor/`).
+
+DISCLAIMER:
+I used AI to help with some bits and pieces of the coding process because I'm lazy and it's hard ok don't obliterate me please
