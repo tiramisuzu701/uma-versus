@@ -122,7 +122,9 @@ def inv_cell(cid, m, f):
     return ', '.join(t) or '<span class="na">-</span>'
 def data_row(cid, m, label, f):
     return (f'<tr>{"<th scope=row>" + label + "</th>" if label is not None else ""}<td>{m["dmg"] or "-"}</td><td>{guard(m["guard"])}</td><td>{num(m["startup"])}</td><td>{num(m["active"])}</td>'
-            f'<td>{num(recov(m))}</td><td>{advc(m["onBlock"], m, "block")}</td><td>{advc(m["onHit"], m, "hit")}</td><td class="iv">{inv_cell(cid, m, f)}</td></tr>')
+            f'<td>{num(recov(m))}</td><td>{airmark(advc(m["onBlock"], m, "block"), m)}</td><td>{airmark(advc(m["onHit"], m, "hit"), m)}</td><td class="iv">{inv_cell(cid, m, f)}</td></tr>')
+def airmark(cell, m):   # air attacks: best case (lowest possible hit), flagged with *
+    return cell + '<span class="am" title="Best case: hitting as low as possible before landing">*</span>' if m.get('airAdv') and 'class="na"' not in cell else cell
 HEAD = '<tr>{}<th>Damage</th><th>Guard</th><th>Startup</th><th>Active</th><th>Recovery</th><th>On-Block</th><th>On-Hit</th><th>Invuln</th></tr>'
 
 def figure(cid, mid, alt):
@@ -224,10 +226,10 @@ def char_page(cid, idx):
   <div class="sw"><div class="pro"><p class="swh">Strengths</p><ul>{''.join(f'<li>{E(x)}</li>' for x in t['strong'])}</ul></div>
     <div class="con"><p class="swh">Weaknesses</p><ul>{''.join(f'<li>{E(x)}</li>' for x in t['weak'])}</ul></div></div>
   <h2 id="{cid}.normals">Normal moves</h2>
-  <p class="note">Images show the first active frame, with <span class="k hi"></span> hitboxes and the <span class="k hu"></span> hurtbox (<span class="k gr"></span> is throw range). Frame data is taken from the game at close range.</p>
+  <p class="note">Images show the first active frame, with <span class="k hi"></span> hitboxes and the <span class="k hu"></span> hurtbox (<span class="k gr"></span> is throw range). Frame data is taken from the game at close range. <b>*</b> Air attacks and hops: the best case, hitting as low as possible right before landing. Hit higher and they're less plus.</p>
   {normals}
   <h2 id="{cid}.skills">Skills</h2>
-  <p class="note">Motion + L or M for the free versions, + H for EX (50 Spurt). Images show the M version.</p>
+  <p class="note">Motion + L or M for the free versions, + H for EX (50 Spurt). Images show the M version. <b>*</b> = best case for air moves (hitting as low as possible).</p>
   {''.join(skill_card(cid, m, mv) for m in skills)}
   <h2 id="{cid}.super">Super</h2>
   {super_card(cid, mv)}
@@ -303,6 +305,7 @@ h3 { font: 700 16px/1.4 var(--sans); margin: 20px 0 8px }
 p, li { max-width: 80ch }
 .note { color: var(--muted); font-size: 13px }
 .mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums }
+.am { color: var(--muted, #888); font-size: .85em; margin-left: 1px }
 .welcome { background: var(--soft); border: 1px solid var(--line); padding: 10px 16px; margin-bottom: 8px }
 /* animated sprite strips */
 .spr { display: inline-block; width: var(--s); height: var(--s); background-repeat: no-repeat; background-size: calc(var(--n) * var(--s)) var(--s);
