@@ -18,7 +18,7 @@ function makeReplay(mode, c, frames) {
   const w = G.p.map(p => p.wins);
   return {
     format: 'umavs-replay', v: 2, build: BUILD, date: new Date().toISOString(), mode, c, stage: G.stage || 0, music: G.music || c[0],
-    names: c.map(id => CHARS[id] ? CHARS[id].name : id),
+    names: c.map(id => CHARS[id] ? CHARS[id].name : id), pal: G.p.map(p => p.pal || 0),
     winner: w[0] >= 2 && w[1] >= 2 ? -1 : w[0] >= 2 ? 0 : w[1] >= 2 ? 1 : -1,
     nframes: frames.length / 2, data: bytesToB64(frames.flatMap(v => [v & 255, v >> 8])),
   };
@@ -51,6 +51,11 @@ function storeReplay(r) {
     localStorage.setItem(REPLAY_KEY, JSON.stringify(list.slice(0, REPLAY_KEEP)));
   } catch (e) { /* storage blocked or full: the in-memory "last match" still works */ }
 }
+function deleteStored(r) {   // a replay is identified by its date stamp
+  try { localStorage.setItem(REPLAY_KEY, JSON.stringify(loadStored().filter(x => x.date !== r.date))); } catch (e) { }
+  if (lastReplay && lastReplay.date === r.date) lastReplay = null;
+}
+function deleteAllStored() { try { localStorage.removeItem(REPLAY_KEY); } catch (e) { } lastReplay = null; }
 function downloadReplay(r) {
   if (!r) return;
   try {
@@ -84,13 +89,15 @@ function toast(s) { toastMsg = s; toastT = 180; }
 // ------------------------------------------------------------------ playback
 const RP = { rep: null, frames: null, idx: 0, speed: 1, paused: false, acc: 0, snaps: {}, n: 0, warn: '' };
 const SPEEDS = [0.25, 0.5, 1, 2, 4];
-function playReplay(r) {
+function playReplay(r, anyway) {
   if (!CHARS[r.c[0]] || !CHARS[r.c[1]]) { toast('This replay uses a character this version doesn\'t have'); return; }
+  // replays only play back exactly on the build that recorded them: say so before starting, not halfway through
+  if (r.build !== BUILD && !anyway) { RP.ask = { rep: r, from: UI.screen, idx: 0 }; UI.screen = 'repwarn'; return; }
   const raw = b64ToBytes(r.data);
   const vals = r.v >= 2 ? raw.filter((_, i) => i % 2 === 0).map((lo, i) => lo | (raw[i * 2 + 1] << 8)) : raw;
   Object.assign(RP, { rep: r, frames: vals, idx: 0, speed: 1, paused: false, acc: 0, snaps: {}, n: r.nframes,
     warn: r.build !== BUILD ? `Recorded on build ${r.build} (you have ${BUILD}), so it may not play back right` : '' });
-  startMatch('replay', r.c[0], r.c[1]);
+  startMatch('replay', r.c[0], r.c[1], r.pal);
   G.stage = r.stage || 0; G.music = r.music || r.c[0];
   RP.snaps[0] = snapshot();
   UI.screen = 'replay'; UI.paused = false;
@@ -112,6 +119,12 @@ function replaySeek(target) {
   G.resim = false;
   G.fx = []; G.texts = []; for (const p of G.p) { p.dispHp = p.redHp = p.hp; p.trail = []; }
 }
+function repWarnTick(e, enter, esc) {
+  const A = RP.ask;
+  if (e.u || e.d || e.l || e.r) { A.idx = 1 - A.idx; Sfx.play('menu'); }
+  if (e.L || e.S || enter) { Sfx.play('ok'); if (A.idx === 0) playReplay(A.rep, true); else UI.screen = A.from === 'repwarn' ? 'replays' : A.from; }
+  if (esc || e.H) { Sfx.play('back'); UI.screen = A.from === 'repwarn' ? 'replays' : A.from; }
+}
 function replayTick(e, edges, esc) {
   const has = k => edges.includes(k);
   if (esc || e.H) { UI.screen = Net.connected ? 'netselect' : 'replays'; return; }
@@ -130,12 +143,13 @@ function replayTick(e, edges, esc) {
 }
 
 // ------------------------------------------------------------------ replays menu
-const RM = { idx: 0 };
+const RM = { idx: 0, del: -1, delT: 0, top: 0 };   // del: row waiting for a second press to confirm
 function replayMenuItems() {
   const items = [];
   if (lastReplay) items.push({ label: 'Watch last match', sub: describe(lastReplay), act: () => playReplay(lastReplay), rep: lastReplay });
   for (const r of loadStored()) if (!lastReplay || r.date !== lastReplay.date) items.push({ label: describe(r), sub: new Date(r.date).toLocaleString(), act: () => playReplay(r), rep: r });
   items.push({ label: 'Load a replay file…', sub: '.umarep files from friends', act: pickReplayFile });
+  if (items.some(it => it.rep)) items.push({ label: 'Delete all saved replays', sub: 'Press twice to confirm', act: null, all: true });
   items.push({ label: 'Back', act: () => { UI.screen = 'mode'; Sfx.play('back'); } });
   return items;
 }
@@ -144,11 +158,24 @@ function describe(r) {
   return `${r.names[0]} vs ${r.names[1]} (${r.mode})${w}`;
 }
 function replaysMenuTick(e, enter, esc, edges) {
-  const items = replayMenuItems();
+  let items = replayMenuItems();
   RM.idx = Math.min(RM.idx, items.length - 1);
-  if (e.u) { RM.idx = (RM.idx + items.length - 1) % items.length; Sfx.play('menu'); }
-  if (e.d) { RM.idx = (RM.idx + 1) % items.length; Sfx.play('menu'); }
-  if (e.L || e.S || enter) { Sfx.play('ok'); items[RM.idx].act(); }
-  if (edges.includes('KeyD') && items[RM.idx].rep) downloadReplay(items[RM.idx].rep);
-  if (esc || e.H) { UI.screen = 'mode'; Sfx.play('back'); }
+  if (RM.delT > 0 && --RM.delT === 0) RM.del = -1;   // the confirm prompt times out
+  if (e.u) { RM.idx = (RM.idx + items.length - 1) % items.length; RM.del = -1; Sfx.play('menu'); }
+  if (e.d) { RM.idx = (RM.idx + 1) % items.length; RM.del = -1; Sfx.play('menu'); }
+  const it = items[RM.idx];
+  const delKey = edges.includes('KeyX') || edges.includes('Delete') || edges.includes('Backspace') || e.M;
+  const confirmAll = it.all && (e.L || e.S || enter || delKey);
+  if ((delKey && it.rep) || confirmAll) {
+    if (RM.del !== RM.idx) { RM.del = RM.idx; RM.delT = 180; Sfx.play('menu'); }   // first press: ask
+    else {   // second press: delete
+      if (it.all) deleteAllStored(); else deleteStored(it.rep);
+      RM.del = -1; Sfx.play('back');
+      items = replayMenuItems(); RM.idx = Math.min(RM.idx, items.length - 1);
+    }
+    return;
+  }
+  if ((e.L || e.S || enter) && it.act) { RM.del = -1; Sfx.play('ok'); it.act(); }
+  if (edges.includes('KeyD') && it.rep) downloadReplay(it.rep);
+  if (esc || e.H) { RM.del = -1; UI.screen = 'mode'; Sfx.play('back'); }
 }

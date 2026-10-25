@@ -12,6 +12,7 @@ T.tokenInputs = (a, tok) => {
   const N = T.N, f = a.facing === 1 ? 'r' : 'l';
   if (tok === 'jc') return [{...N(), u:1, [f]:1}, {...N(), u:1, [f]:1}];
   if (tok === 'dc') return [{...N(), [f]:1}, N(), {...N(), [f]:1}, {...N(), [f]:1}];
+  if (tok === 'fS') return [{...N(), S:1}];
   let m = tok.match(/^(\d{3,5})([LMH])$/);
   if (m) { const out = []; for (const ch of m[1]) { out.push({...N(), ...T.dirIn(a, ch)}, {...N(), ...T.dirIn(a, ch)}); } out[out.length-1][m[2]] = 1; return out; }
   m = tok.match(/^d([LMH])$/);

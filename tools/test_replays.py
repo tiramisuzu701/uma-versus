@@ -6,7 +6,7 @@ from playwright.async_api import async_playwright
 JS = r"""() => {
   const cs = () => { const k = rs; rs = 0; const c = checksum() + "|" + G.p.map(p => [p.hp, Math.round(p.x * 64), p.state, p.wins, Math.round(p.meter*64)].join()).join(";"); rs = k; return c; };
   const out = [], ROS = ROSTER, wins = {}; for (const c of ROS) wins[c] = [0, 0];
-  const pairs = [['mm','tt'],['tt','kb'],['kb','mm'],['mm','ds'],['tt','gs'],['kb','spe'],['mm','vo'],['tt','suz'],['kb','ds'],['mm','mm'],['tt','tt'],['kb','kb']];
+  const pairs = [['mm','tt'],['tt','kb'],['kb','mm'],['mm','ds'],['tt','gs'],['kb','spe'],['mc','at'],['at','jp'],['jp','df'],['df','mc'],['mc','mc'],['at','at'],['jp','jp'],['df','df'],['mc','vo'],['at','suz']];
   for (const [c1, c2] of pairs) for (let rep = 0; rep < 2; rep++) {
     const [x1, x2] = rep ? [c2, c1] : [c1, c2];
     startMatch('versus', x1, x2); rs = 11 + rep; const log = []; let f = 0, snap = null, snapF = 1500, sumAt = null;

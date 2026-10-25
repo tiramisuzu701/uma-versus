@@ -17,7 +17,7 @@ JS = r"""async (gfx) => {
   STAGES.forEach((S, i) => { if (S.back) { const f = S.back; S.back = function () { const t0 = performance.now(); f.apply(this, arguments); const d = performance.now() - t0; const p = parts['stage.back.' + i] || (parts['stage.back.' + i] = { sum: 0, max: 0, n: 0 }); p.sum += d; p.n++; p.max = Math.max(p.max, d); }; }
                              if (S.front) { const f = S.front; S.front = function () { const t0 = performance.now(); f.apply(this, arguments); const d = performance.now() - t0; const p = parts['stage.front.' + i] || (parts['stage.front.' + i] = { sum: 0, max: 0, n: 0 }); p.sum += d; p.n++; p.max = Math.max(p.max, d); }; } });
   const frames = [];
-  const pairs = [['tt', 'ds'], ['kb', 'spe'], ['gs', 'mm'], ['vo', 'suz']];
+  const pairs = [['mc', 'at'], ['jp', 'df'], ['at', 'mc'], ['df', 'suz']];
   for (let s = 0; s < STAGES.length; s++) {
     const [c1, c2] = pairs[s % pairs.length];
     startMatch('cpu', c1, c2); G.stage = s; G.cpuLevel = 4; UI.screen = 'game'; UI.paused = false; rs = 3 + s;
@@ -37,8 +37,8 @@ async def main():
         b = await p.chromium.launch(args=['--js-flags=--expose-gc'])
         pg = await b.new_page(viewport={'width': 1920, 'height': 1080}, device_scale_factor=1)
         cdp = await pg.context.new_cdp_session(pg)
-        await pg.goto('file://' + ROOT + '/index.html'); await pg.wait_for_timeout(4000)
-        print('music tracks decoded in the background:', await pg.evaluate('Object.keys(Music.urls).length'), 'of', await pg.evaluate('Object.keys(MUSIC_DATA).length'))
+        await pg.goto('file://' + ROOT + '/index.html', wait_until='domcontentloaded', timeout=120000); await pg.wait_for_timeout(6000)
+        print('music tracks decoded in the background:', await pg.evaluate('Object.keys(Music.urls).length'), 'of', await pg.evaluate("document.querySelectorAll('script.track').length"))
         await cdp.send('Performance.enable')
         m0 = {m['name']: m['value'] for m in (await cdp.send('Performance.getMetrics'))['metrics']}
         r = await pg.evaluate(JS, GFX)

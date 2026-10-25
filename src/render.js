@@ -11,20 +11,107 @@ const SPR = {};
 function loadImg(src) { return new Promise(r => { const i = new Image(); i.onload = () => r(i); i.src = src; }); }
 function canvasOf(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 
-function hueRotate(img, deg) {
+// ------------------------------------------------------------------ colour palettes
+// Every runner has the same set of alternate colours. Skin stays as it is; everything else is shifted.
+// hue: rotate by degrees · to: move every hue to this one · sat / lit: scale · pale: lift toward white
+// tint: grey, black and silver (hair or clothes with no colour of their own) take this hue, so they change too
+const PALETTES = [
+  { name: 'ORIGINAL' },
+  { name: 'RIVAL', hue: 160, tint: 165 },
+  { name: 'MIDNIGHT', hue: 205, sat: 0.7, lit: 0.62, tint: 228 },
+  { name: 'GOLD CUP', to: 44, sat: 1.15, tint: 44 },
+  { name: 'SNOWFALL', sat: 0.28, pale: 0.3 },
+  { name: 'SAKURA', to: 335, sat: 0.95, lit: 1.04, tint: 335 },
+];
+function rgb2hsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (!d) return [0, 0, l];
+  const s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  const h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+function hsl2rgb(h, s, l) {
+  h = ((h % 360) + 360) % 360 / 360;
+  if (!s) return [l * 255, l * 255, l * 255];
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+  const f = t => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+  return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
+}
+// Each runner's skin, mouth and blush colours, picked from her own sprite sheet (tools: grown from the cheek
+// tone, then checked by eye). Palettes recolour everything else: hair, clothes and eyes.
+const SKIN = {
+  spe: ['#fbceae', '#d7c5b7', '#eaaea4', '#ffa48a', '#f3b388', '#e95a59', '#d77650', '#b23a40'],
+  suz: ['#fbd0be', '#ffb0a7', '#f3b49c', '#d7c5b7', '#e98277', '#e95a59', '#b23a40'],
+  gs: ['#ffe3c6', '#ffbec1', '#fabdae', '#d7c5b7', '#ea97b9', '#f29689', '#e95a59', '#b23a40'],
+  vo: ['#f3c7be', '#fbceae', '#d7c5b7', '#ffa48a', '#f3b388', '#e98975', '#e95a59', '#bd8769'],
+  ds: ['#ffe8cb', '#faccbd', '#ffb9b0', '#d7c5b7', '#f29793', '#e95a59', '#e63f63', '#b23a40'],
+  mm: ['#f8decc', '#febebc', '#ffa7b3', '#ffa6ba', '#d7c5b7', '#f09e86', '#e95a59', '#b23a40'],
+  tt: ['#fbceae', '#eaaea4', '#ffa48a', '#f3b388', '#d77650'],
+  kb: ['#f8decc', '#febebc', '#d7c5b7', '#ffa48a', '#f09e86', '#e95a59', '#b23a40'],
+  jp: ['#ffe5d7', '#ffd7b9', '#ffc097', '#d7c5b7', '#ffa48a', '#e98b70', '#e95a59', '#b23a40'],
+  at: ['#ffe0c4', '#ffafa6', '#ffbd94', '#d7c5b7', '#eb8b74', '#e95a59', '#b23a40'],
+  mc: ['#ffe0c4', '#ffafa6', '#ffbd94', '#d7c5b7', '#eb8b74', '#e95a59', '#b23a40'],
+  df: ['#fef3ed', '#f6c8c9', '#ffd7b7', '#fca2a3', '#d7c5b7', '#eaaea4', '#ffb28c', '#ffa48a', '#f08c6c', '#e95a59', '#b66961', '#b23a40'],
+};
+const MOUTH = ['#e95a59', '#b23a40', '#ec2b46', '#ff4e6b', '#c61030', '#d7c5b7', '#ececec', '#7f0f00', '#5d1b00', '#000000'];   // mouth, blush, teeth and eye-white shades, and the line art, shared by every runner
+const SKIN_SET = {};
+function skinTest(cid) {
+  if (!SKIN_SET[cid]) SKIN_SET[cid] = new Set([...(SKIN[cid] || []), ...MOUTH].map(h => parseInt(h.slice(1), 16)));
+  const set = SKIN_SET[cid];
+  return (r, g, b) => set.has((r << 16) | (g << 8) | b);
+}
+function palColour(P, cid) {
+  const isSkin = skinTest(cid);
+  return (r, g, b) => {
+    let [h, s, l] = rgb2hsl(r, g, b);
+    if (isSkin(r, g, b)) return [r, g, b];
+    if (P.tint !== undefined && s < 0.14 && l > 0.08 && l < 0.93) { h = P.tint; s = 0.18 + 0.22 * (1 - Math.abs(l - 0.5) * 2); }   // colourless mid-tones pick up the palette's colour
+    else if (P.hue) h += P.hue;
+    if (P.to !== undefined) h = P.to;
+    if (P.sat) s = Math.min(1, s * P.sat);
+    if (P.lit) l = Math.min(1, l * P.lit);
+    if (P.pale) l = l + (1 - l) * P.pale;
+    return hsl2rgb(h, s, l);
+  };
+}
+// Sunday Silence: Cafe's own sprite as a shadow, black-violet all over except the golden eyes
+function shadowColour(r, g, b) {
+  const [h, s, l] = rgb2hsl(r, g, b);
+  if (h >= 30 && h <= 62 && s > 0.55 && l > 0.45 && l < 0.85) return [255, 214, 70];
+  return hsl2rgb(268, 0.35, 0.05 + l * 0.2);
+}
+// cid: also keep thin features drawn inside the skin (a mouth or lash line with skin on both sides), even when
+// their colour is one the hair uses too
+function recolour(img, fn, cid) {
   const c = canvasOf(img.width, img.height), x = c.getContext('2d');
   x.drawImage(img, 0, 0);
-  const d = x.getImageData(0, 0, c.width, c.height), a = d.data;
-  const r = deg * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r);
-  const m = [.213 + cs * .787 - sn * .213, .715 - cs * .715 - sn * .715, .072 - cs * .072 + sn * .928,
-    .213 - cs * .213 + sn * .143, .715 + cs * .285 + sn * .140, .072 - cs * .072 - sn * .283,
-    .213 - cs * .213 - sn * .787, .715 - cs * .715 + sn * .715, .072 + cs * .928 + sn * .072];
+  const d = x.getImageData(0, 0, c.width, c.height), a = d.data, memo = new Map(), W4 = c.width * 4;
+  const skin = cid && SKIN[cid] ? new Set(SKIN[cid].map(h => parseInt(h.slice(1), 16))) : null;
+  const isSk = i => i >= 0 && i < a.length && a[i + 3] && skin.has((a[i] << 16) | (a[i + 1] << 8) | a[i + 2]);
+  const inside = skin ? new Uint8Array(a.length >> 2) : null;
+  if (skin) for (let i = 0; i < a.length; i += 4) if (a[i + 3] && ((isSk(i - 4) && isSk(i + 4)) || (isSk(i - W4) && isSk(i + W4)))) inside[i >> 2] = 1;
   for (let i = 0; i < a.length; i += 4) {
-    if (!a[i + 3]) continue;
-    const R = a[i], Gc = a[i + 1], B = a[i + 2];
-    a[i] = R * m[0] + Gc * m[1] + B * m[2]; a[i + 1] = R * m[3] + Gc * m[4] + B * m[5]; a[i + 2] = R * m[6] + Gc * m[7] + B * m[8];
+    if (!a[i + 3] || (inside && inside[i >> 2])) continue;
+    const key = (a[i] << 16) | (a[i + 1] << 8) | a[i + 2];
+    let o = memo.get(key);
+    if (!o) { o = fn(a[i], a[i + 1], a[i + 2]).map(v => Math.max(0, Math.min(255, Math.round(v)))); memo.set(key, o); }
+    a[i] = o[0]; a[i + 1] = o[1]; a[i + 2] = o[2];
   }
   x.putImageData(d, 0, 0); return c;
+}
+function warmPalettes() {
+  if (typeof SPR === 'undefined') return;
+  for (const p of G.p) { if (!SPR[p.cid]) continue; palSheet(p.cid, p.pal, false); palSheet(p.cid, p.pal, true); if (p.c.puppet) { palSheet(p.cid, 'shadow', false); palSheet(p.cid, 'shadow', true); } }
+}
+// palette sheets are made the first time they're needed (the select screen, or a match starting)
+function palSheet(cid, pal, right) {
+  const S = SPR[cid], key = pal === 'shadow' ? 'shadow' : (pal | 0) % PALETTES.length;
+  if (!S.pal[key]) {
+    const fn = key === 'shadow' ? shadowColour : palColour(PALETTES[key], cid);
+    S.pal[key] = { img: recolour(S.img, fn, key === 'shadow' ? null : cid), imgR: recolour(S.imgR, fn, key === 'shadow' ? null : cid) };
+  }
+  return right ? S.pal[key].imgR : S.pal[key].img;
 }
 function whiteOf(img) {
   const c = canvasOf(img.width, img.height), x = c.getContext('2d');
@@ -34,8 +121,8 @@ function whiteOf(img) {
 async function loadAssets() {
   for (const [k, a] of Object.entries(ASSETS)) {
     const img = await loadImg(a.img), imgR = await loadImg(a.imgR);
-    SPR[k] = { img, alt: hueRotate(img, 160), white: whiteOf(img),
-               imgR, altR: hueRotate(imgR, 160), whiteR: whiteOf(imgR), anims: a.anims, cols: a.cols };
+    SPR[k] = { img, white: whiteOf(img), imgR, whiteR: whiteOf(imgR), anims: a.anims, cols: a.cols };
+    SPR[k].pal = { 0: { img, imgR } };
   }
   buildStages();
 }
@@ -73,7 +160,7 @@ function frameOf(p) {
     case 'airHit': return p.vy < 0 ? ['138', Math.min(1, Math.floor(p.t / 4))] : ['138', 2];
     case 'down': return p.t < 6 ? ['139', 0] : ['138', 3];
     case 'wake': return ['139', 2];
-    case 'throwing': return cyc(c.throwAnim, 6, p.t);
+    case 'throwing': return cyc(p.throwAnimCur || c.throwAnim, 6, p.t);
     case 'thrown': return ['310', 0];
     case 'tech': return ['310', 1];
     case 'cine': { const s = p.move.cine[p.cs] || p.move.cine[p.move.cine.length - 1]; return [s[0], s[1]]; }
@@ -93,8 +180,9 @@ function drawSpr(cid, variant, anim, fi, x, y, facing, scale = SC, kx = 1, ky = 
   ctx.scale((facing === 1 ? -1 : 1) * kx, ky);
   const s = 64 * scale;
   // facing right = mirrored sprite with the "r" detail layer (asymmetric hair/accessories)
-  const key = (variant || 'img') + (facing === 1 ? 'R' : '');
-  ctx.drawImage(S[key] || S[variant] || S.img, sx, sy, 64, 64, -s / 2, -s, s, s);
+  // variant: a palette number, 'shadow' or 'white'
+  const src = variant === 'white' ? (facing === 1 ? S.whiteR : S.white) : palSheet(cid, variant || 0, facing === 1);
+  ctx.drawImage(src, sx, sy, 64, 64, -s / 2, -s, s, s);
   ctx.restore();
 }
 
@@ -160,6 +248,19 @@ function drawMotif(motif, x, y, size, rot, color) {
   else if (motif === 'flames') { ctx.save(); ctx.translate(x, y); ctx.beginPath();   // Kitasan: festival embers
     ctx.moveTo(0, -size * 1.2); ctx.quadraticCurveTo(size * 0.8, 0, 0, size * 0.6); ctx.quadraticCurveTo(-size * 0.8, 0, 0, -size * 1.2); ctx.fill();
     ctx.fillStyle = 'rgba(255,240,170,.7)'; ctx.beginPath(); ctx.arc(0, size * 0.15, size * 0.28, 0, 7); ctx.fill(); ctx.restore(); }
+  else if (motif === 'paw') { ctx.save(); ctx.translate(x, y); ctx.rotate(rot * 0.3);   // Jungle Pocket: lion paw prints
+    ctx.beginPath(); ctx.ellipse(0, size * 0.25, size * 0.5, size * 0.4, 0, 0, 7); ctx.fill();
+    for (let i = -1.5; i <= 1.5; i++) { ctx.beginPath(); ctx.arc(i * size * 0.32, -size * 0.35 - (Math.abs(i) < 1 ? size * 0.12 : 0), size * 0.17, 0, 7); ctx.fill(); }
+    ctx.restore(); }
+  else if (motif === 'bubbles') { ctx.save(); ctx.translate(x, y);   // Tachyon: lab bubbles
+    ctx.globalAlpha *= 0.85; ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, size * 0.7, 0, 7); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(-size * 0.25, -size * 0.25, size * 0.18, 0, 7); ctx.fill(); ctx.restore(); }
+  else if (motif === 'moons') { ctx.save(); ctx.translate(x, y); ctx.rotate(rot * 0.2);   // Cafe: crescent moons
+    ctx.beginPath(); ctx.arc(0, 0, size * 0.75, 0, 7); ctx.fill(); ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath(); ctx.arc(size * 0.32, -size * 0.18, size * 0.62, 0, 7); ctx.fill(); ctx.restore(); }
+  else if (motif === 'cheese') { ctx.save(); ctx.translate(x, y); ctx.rotate(rot * 0.4);   // Dantsu: cheese wedges
+    ctx.fillStyle = '#ffd24a'; ctx.beginPath(); ctx.moveTo(-size * 0.8, size * 0.5); ctx.lineTo(size * 0.8, size * 0.5); ctx.lineTo(size * 0.5, -size * 0.6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(190,120,20,.7)'; ctx.beginPath(); ctx.arc(0, size * 0.15, size * 0.16, 0, 7); ctx.fill(); ctx.restore(); }
   else { ctx.fillRect(x - size * 0.4, y - size * 0.4, size * 0.8, size * 0.8); }   // bang: chunky confetti
 }
 // one effect instance; local space faces right, mirrored by facing
@@ -252,6 +353,47 @@ function drawVfx(f, left) {
 function drawProj(q, left) {
   const x = q.x - left, y = q.y;   // q.y is the projectile's center
   const owner = G.p[q.owner];
+  if (q.style === 'potion') {   // Tachyon: a flask in flight, a bubbling puddle on the floor, then a burst
+    const col = owner ? owner.c.look.fxColor : '#b6ff5a';
+    if (q.phase === 'boom') {
+      const k = Math.min(1, q.t / (q.life + q.t || 1)), r = 40 + q.t * 7;
+      ctx.globalAlpha = Math.max(0, 0.75 - q.t * 0.05); ctx.fillStyle = col;
+      for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + q.t * 0.1; ctx.beginPath(); ctx.arc(x + Math.cos(a) * r * 0.35, y - 60 + Math.sin(a) * r * 0.5, r * 0.45, 0, 7); ctx.fill(); }
+      ctx.fillStyle = '#fff'; ctx.globalAlpha *= 0.6; ctx.beginPath(); ctx.arc(x, y - 60, r * 0.3, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+      if (q.t % 2 === 0 && q.t < 10) G.fx.push({ type: 'mot', motif: 'bubbles', color: col, x: q.x + (Math.random() - .5) * 80, y: q.y - 40 - Math.random() * 80, vx: 0, vy: -2, rot: 0, vr: 0, t: 0, life: 22, size: 7 });
+      return;
+    }
+    if (q.phase === 'set') {
+      const armed = q.cool <= 0, pulse = armed ? 0.6 + 0.4 * Math.sin(q.t * 0.25) : 0.35;
+      ctx.globalAlpha = 0.85; ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(x, GY - 3, 30, 7, 0, 0, 7); ctx.fill();
+      ctx.globalAlpha = pulse; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(x - 6, GY - 5, 12, 3, 0, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+      // the flask standing in the puddle; a fuse ring when it's on a timer
+      ctx.fillStyle = 'rgba(230,250,255,.85)'; ctx.fillRect(x - 5, GY - 26, 10, 6); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, GY - 13, 9, 0, 7); ctx.fill();
+      if (q.trap.fuse) { const f = Math.min(1, q.t / q.trap.fuse); ctx.strokeStyle = f > 0.7 && q.t % 6 < 3 ? '#ff5a4a' : '#ffd24a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, GY - 13, 15, -Math.PI / 2, -Math.PI / 2 + f * Math.PI * 2); ctx.stroke(); }
+      if (armed && q.t % 12 === 0) G.fx.push({ type: 'mot', motif: 'bubbles', color: col, x: q.x + (Math.random() - .5) * 30, y: GY - 10, vx: 0, vy: -1, rot: 0, vr: 0, t: 0, life: 24, size: 4 });
+      return;
+    }
+    ctx.save(); ctx.translate(x, y); ctx.rotate(q.t * 0.3);
+    ctx.fillStyle = 'rgba(230,250,255,.9)'; ctx.fillRect(-4, -16, 8, 8); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, 0, 10, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.arc(-3, -3, 3, 0, 7); ctx.fill(); ctx.restore();
+    return;
+  }
+  if (q.style === 'cheese' || q.style === 'wedge') {   // Dantsu: a rolling cheese wheel, or a wedge tossed in an arc
+    ctx.save(); ctx.translate(x, y); ctx.rotate(q.t * (q.style === 'cheese' ? 0.22 : 0.3) * q.facing);
+    if (q.style === 'cheese') {
+      ctx.fillStyle = '#e7a92b'; ctx.beginPath(); ctx.arc(0, 0, 22, 0, 7); ctx.fill();
+      ctx.fillStyle = '#ffd456'; ctx.beginPath(); ctx.arc(0, 0, 18, 0, 7); ctx.fill();
+      ctx.fillStyle = '#d89a24'; for (const [hx, hy, hr] of [[-7, -6, 4], [6, -2, 3], [-2, 8, 3.5], [9, 9, 2.5]]) { ctx.beginPath(); ctx.arc(hx, hy, hr, 0, 7); ctx.fill(); }
+      ctx.strokeStyle = '#b5761a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, 22, 0, 7); ctx.stroke();
+    } else {
+      ctx.fillStyle = '#ffd456'; ctx.beginPath(); ctx.moveTo(-18, 12); ctx.lineTo(18, 12); ctx.lineTo(10, -16); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#e7a92b'; ctx.fillRect(-18, 8, 36, 4);
+      ctx.fillStyle = '#d89a24'; ctx.beginPath(); ctx.arc(2, 2, 3.5, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(-7, 6, 2.5, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+    if (q.style === 'cheese' && q.t % 4 === 0) dust(q.x - q.vx * 3, GY, Math.sign(q.vx));
+    return;
+  }
   if (q.style === 'rose') {   // crimson shot with a petal trail
     const col = q.sup ? '#ffc93c' : owner ? owner.c.look.fxColor : '#ff5872', ang = Math.atan2(q.vy || 0, q.vx), sz = q.size || 1;
     for (let i = 5; i >= 1; i--) { ctx.globalAlpha = q.sup ? 0.22 : 0.14; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x - q.vx * i * 2, y - (q.vy || 0) * i * 2, (20 - i * 2) * sz, 0, 7); ctx.fill(); }
@@ -333,7 +475,7 @@ function squash(p) {
   return [sx, sy, lean];
 }
 function drawFighter(p, left) {
-  const variant = p.alt ? 'alt' : 'img';
+  const variant = p.pal || 0;
   const [anim, fi] = frameOf(p);
   // afterimages
   for (const tr of p.trail) {
@@ -362,6 +504,17 @@ function drawFighter(p, left) {
     ctx.restore(); ctx.globalAlpha = 1;
   }
 }
+// Manhattan Cafe's Friend: Cafe's sprite as a shadow with golden eyes
+function drawPuppet(p, left) {
+  if (!p.c.puppet || p.pupState === 'away') return;
+  const pm = p.pupState === 'act' && pupMoveOf(p), A = SPR[p.cid].anims;
+  const [anim, fi] = pm ? seqFrame(pm, p.pupT) : ['800', Math.floor(G.frameCount / 10) % A['800'][1]];
+  const bob = pm ? 0 : Math.sin(G.frameCount / 14) * 5 - 8;
+  ctx.globalAlpha = pm ? 0.92 : 0.5 + 0.08 * Math.sin(G.frameCount / 9);
+  ctx.save(); ctx.shadowColor = 'rgba(190,150,255,.85)'; ctx.shadowBlur = (pm ? 10 : 6) * RES;   // a faint glow so she reads on dark stages
+  drawSpr(p.cid, 'shadow', anim, fi, p.pupX - left, p.pupY + bob, p.pupF);
+  ctx.restore(); ctx.globalAlpha = 1;
+}
 function drawShadow(p, left) {
   const h = Math.max(0, GY - p.y), s = Math.max(0.4, 1 - h / 300);
   ctx.fillStyle = 'rgba(20,50,20,.35)';
@@ -372,8 +525,12 @@ function drawBoxes(left) {
   for (const p of G.p) {
     const hb = hurtbox(p);
     if (hb) R(hb, invulnerable(p, false) ? 'rgba(255,255,255,1)' : p.state === 'attack' && p.armorLeft && p.move.armor && p.t >= p.move.armor[0] && p.t <= p.move.armor[1] ? 'rgba(255,200,40,1)' : 'rgba(80,160,255,1)');
-    if (p.state === 'attack' && p.move.hits) p.move.hits.forEach((h, i) => { if (p.t >= h.f[0] && p.t <= h.f[1] && !p.hitDone[i]) R(rect(p, h.box), 'rgba(255,60,60,1)'); });
-    if (p.state === 'attack' && p.move.grab && p.t >= p.move.grab[0] && p.t <= p.move.grab[1]) R(rect(p, [0, -120, p.move.range, 120]), 'rgba(255,230,60,1)');
+    // a hit that already connected stays drawn for its active frames, dimmer
+    if (p.state === 'attack' && p.move.hits) p.move.hits.forEach((h, i) => { if (p.t >= h.f[0] && p.t <= h.f[1]) R(rect(p, h.box), p.hitDone[i] ? 'rgba(170,70,90,1)' : 'rgba(255,60,60,1)'); });
+    if (p.state === 'attack' && p.move.grab && p.t >= p.move.grab[0] && p.t <= p.move.grab[1]) R(rect(p, p.move.grabAir ? [0, -120 - (p.move.grabH || 200), p.move.range, (p.move.grabH || 200)] : [0, -120, p.move.range, 120]), 'rgba(255,230,60,1)');
+    const ph = pupHurtbox(p), pm = p.c.puppet && p.pupState === 'act' && pupMoveOf(p);
+    if (ph) R(ph, 'rgba(150,110,255,1)');
+    if (pm && pm.hits) pm.hits.forEach((h, i) => { if (p.pupT >= h.f[0] && p.pupT <= h.f[1]) R(pupRect(p, h.box), (p.pupHit & (1 << i)) ? 'rgba(170,70,90,1)' : 'rgba(255,60,60,1)'); });
     ctx.fillStyle = '#fff'; ctx.fillRect(p.x - left - 1, p.y - 6, 2, 12);
   }
   for (const q of G.projs) R(projRect(q), 'rgba(255,60,60,1)');
@@ -391,6 +548,7 @@ function renderGame() {
   const left = G.cam - W / 2;
   drawStage(G.cam);
   for (const p of G.p) drawShadow(p, left);
+  for (const p of G.p) if (p.pupState !== 'act') drawPuppet(p, left);   // idle Friend floats behind Cafe
   const order = [...G.p].sort((a, b) => (a.state === 'attack' || a.state === 'cine' || a.state === 'throwing' ? 1 : 0) - (b.state === 'attack' || b.state === 'cine' || b.state === 'throwing' ? 1 : 0));
   if (G.flashOwner) {
     for (const p of order) if (p !== G.flashOwner) drawFighter(p, left);
@@ -401,6 +559,7 @@ function renderGame() {
     drawFighter(G.flashOwner, left);
     drawSuperFlash(G.flashOwner);
   } else for (const p of order) drawFighter(p, left);
+  for (const p of G.p) if (p.pupState === 'act') drawPuppet(p, left);
   for (const q of G.projs) drawProj(q, left);
   drawFx(left);
   drawStageFront(G.cam);
@@ -411,7 +570,7 @@ function renderGame() {
   }
   baseT();
   drawHUD();
-  if (G.mode === 'training') { if (!TR.on) drawTrainingHUD(); drawInputDisplay(); drawFrameMeter(); drawTrialHUD(); }
+  if (G.mode === 'training') { if (TUT.on) drawTutHUD(); else { if (!TR.on) drawTrainingHUD(); drawInputDisplay(); drawFrameMeter(); drawTrialHUD(); } }
   if (G.phase === 'intro') drawRoundIntro();
   if (G.phase === 'ko') drawKO();
   if (G.phase === 'match') drawResults();

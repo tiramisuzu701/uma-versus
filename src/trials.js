@@ -20,6 +20,14 @@ const TRIAL_EXTRA = {
        { name: 'Step wall bounce', seq: '5M 236H , 2H', note: 'EX Teio Step wall-bounces in the corner', corner: true }],
   kb: [{ name: 'Ground bounce uppercut', seq: '2M 2H jc j.M j.H 2H 623M', note: 'Ground bounce, relaunch, then Matsuri Uppercut' },
        { name: 'Straight wall bounce', seq: '5M 41236H , 5H 623M', note: 'EX Kitasan Straight wall-bounces in the corner', corner: true }],
+  jp: [{ name: 'Ground bounce relaunch', seq: '2M 2H jc j.M j.H 2H', note: 'Ground bounce off j.H, then 2H again' },
+       { name: 'Charge wall bounce', seq: '5M 5H 214H , 2H', note: 'EX Lion Charge wall-bounces them back over you: catch them with 2H', corner: true }],
+  at: [{ name: 'Ground bounce spark', seq: '2M 2H jc j.M j.H 2H 623M', note: 'Ground bounce, relaunch, then Overdose Spark' },
+       { name: 'Relaunch', seq: '2H jc j.M j.H 2H', note: 'Launch, air combo, then 2H again' }],
+  mc: [{ name: 'Friend link', seq: '5M 236M , 5M 5H', note: 'The Friend\'s rush hits after Cafe has recovered: link 5M' },
+       { name: 'Ground bounce shade', seq: '2M 2H jc j.M j.H 2H 623M', note: 'Ground bounce, relaunch, then Rising Shade' }],
+  df: [{ name: 'Twist juggle', seq: '2M 236M fS , 2H jc j.M j.H', note: 'Flame Twist launches: land, then 2H for an air combo' },
+       { name: 'Cheese platter', seq: '2L 2M 214H', note: 'EX Cheese Wheel: the wedge and the wheel both hit' }],
 };
 function trialsFor(cid) {
   return [...CHARS[cid].combos.map(c => ({ ...c, level: 1 })), ...(TRIAL_EXTRA[cid] || []).map(c => ({ ...c, level: 2 }))];
@@ -32,6 +40,7 @@ function markTrial(cid, i) { (trialDone[cid] = trialDone[cid] || []); if (!trial
 // token -> the move id it should produce
 function tokenMove(c, tok) {
   if (tok === 'jc' || tok === 'dc' || tok === ',') return null;
+  if (tok === 'fS') return Object.keys(c.moves).find(k => /~F$/.test(k)) || tok;   // a skill's on-hit follow-up
   let m = tok.match(/^(\d{3,5})([LMH])$/);
   if (m) { const id = c.techMap['g' + m[1]]; if (!id) return tok; return m[2] === 'H' && c.moves[id + 'X'] ? id + 'X' : m[2] === 'L' && c.moves[id + '.L'] ? id + '.L' : id; }
   m = tok.match(/^j\.([LMH])$/); if (m) return 'j' + m[1];
@@ -79,6 +88,7 @@ function tokenInputs(a, tok) {
   const f = a.facing === 1 ? 'r' : 'l';
   if (tok === 'jc') return [{ ...N0(), u: 1, [f]: 1 }, { ...N0(), u: 1, [f]: 1 }];
   if (tok === 'dc') return [{ ...N0(), [f]: 1 }, N0(), { ...N0(), [f]: 1 }, { ...N0(), [f]: 1 }];
+  if (tok === 'fS') return [{ ...N0(), S: 1 }];
   let m = tok.match(/^(\d{3,5})([LMH])$/);
   if (m) { const out = []; for (const ch of m[1]) out.push({ ...N0(), ...dirInput(a, ch) }, { ...N0(), ...dirInput(a, ch) }); out[out.length - 1][m[2]] = 1; return out; }
   m = tok.match(/^d([LMH])$/);
@@ -163,7 +173,7 @@ function drawInputDisplay() {
   TOOLS.hist.forEach((h, i) => {
     if (TR.on && i === 1) return;   // trials: only your inputs, on the right (the trial list is on the left)
     const x = i === 0 && !TR.on ? 14 : W - 104, y0 = 232;
-    ctx.fillStyle = 'rgba(8,11,28,.55)'; ctx.fillRect(x - 4, y0 - 14, 94, h.length * 16 + 8);
+    ctx.fillStyle = 'rgba(24,11,42,.55)'; ctx.fillRect(x - 4, y0 - 14, 94, h.length * 16 + 8);
     h.forEach((e, k) => {
       const y = y0 + k * 16, a = 1 - k * 0.04; ctx.globalAlpha = Math.max(0.35, a);
       label(String(Math.min(99, e.n)), x + 18, y, 12, PAL.dim, 'right', 600);
@@ -174,11 +184,11 @@ function drawInputDisplay() {
     });
   });
 }
-const FM_COL = ['#3a4166', '#2fae5b', '#ff4d5e', '#3d7cf2', '#f6c343', '#8a6bff', '#7a5a9a', '#2a3150'];
+const FM_COL = ['#3a4166', '#2fae5b', '#ff4d5e', '#3d7cf2', '#f6c343', '#8a6bff', '#7a5a9a', '#3a2a5c'];
 function drawFrameMeter() {
   if (!TOOLS.meter || !TOOLS.fm[0].length) return;
   const n = 90, cw = 7, x0 = W / 2 - (n * cw) / 2, y0 = 446;
-  ctx.fillStyle = 'rgba(8,11,28,.8)'; ctx.fillRect(x0 - 70, y0 - 6, n * cw + 140, 40);
+  ctx.fillStyle = 'rgba(24,11,42,.8)'; ctx.fillRect(x0 - 70, y0 - 6, n * cw + 140, 40);
   TOOLS.fm.forEach((row, i) => {
     const y = y0 + i * 15, off = Math.max(0, row.length - n);
     label(i === 0 ? 'P1' : 'P2', x0 - 54, y + 6, 12, i === 0 ? PAL.p1 : PAL.p2, 'left', 900, true);
@@ -192,7 +202,7 @@ function drawFrameMeter() {
   const r = TOOLS.fm[0]; let s = 0; while (s < r.length && (r[s] & 7) !== 1) s++;
   let e = s; while (e < r.length && (r[e] & 7) === 1) e++;
   const startup = s < r.length ? e - s + 1 : null;
-  label(startup ? `startup ${startup}f` : '', x0 + n * cw + 8, y0 + 5, 12, '#cfd5f0', 'left', 700);
+  label(startup ? `startup ${startup}f` : '', x0 + n * cw + 8, y0 + 5, 12, '#ddd2f0', 'left', 700);
   if (G.adv && G.adv.val !== null) label(`${G.adv.a.side === 0 ? 'P1' : 'P2'} ${G.adv.val >= 0 ? '+' : ''}${G.adv.val}`, x0 + n * cw + 8, y0 + 21, 13, G.adv.val > 0 ? '#7dff9a' : G.adv.val < 0 ? '#ff7d7d' : '#fff', 'left', 900, true);
   const keys = [['startup', 1], ['active', 2], ['recovery', 3], ['stun', 4], ['invuln', 8]];
   keys.forEach(([t, v], k) => { const x = x0 + k * 90; if (v === 8) { ctx.strokeStyle = '#fff'; ctx.strokeRect(x + 0.5, y0 + 30.5, 9, 7); } else { ctx.fillStyle = FM_COL[v]; ctx.fillRect(x, y0 + 30, 10, 8); } label(t, x + 14, y0 + 34, 11, PAL.dim, 'left', 600); });
@@ -228,11 +238,11 @@ function drawTrialsMenu() {
   const cid = ROSTER[TM.char], c = CHARS[cid], list = trialsFor(cid), done = trialDone[cid] || [];
   plate(24, 52, 420, 36, c.color, 12); gateTag(gateOf(cid), 34, 57, 26);
   label(nameOf(cid), 70, 71, 26, '#fff', 'left', 900, true);
-  label(`${done.length} / ${list.length} CLEARED`, W - 40, 71, 18, done.length === list.length ? PAL.gold : '#e6e9f8', 'right', 900, true);
-  drawSpr(cid, 'img', '800', Math.floor(UI.t / 9) % SPR[cid].anims['800'][1], 800, 470, -1, 3.6);
+  label(`${done.length} / ${list.length} CLEARED`, W - 40, 71, 18, done.length === list.length ? PAL.gold : '#efe8fb', 'right', 900, true);
+  drawSpr(cid, 0, '800', Math.floor(UI.t / 9) % SPR[cid].anims['800'][1], 800, 470, -1, 3.6);
   list.forEach((t, i) => {
     const y = 104 + i * 50, s = i === TM.idx;
-    slant(30 + (s ? 10 : 0), y, 600, 42, 10, s ? 'rgba(255,255,255,.96)' : 'rgba(12,17,38,.86)');
+    rowSlant(30 + (s ? 10 : 0), y, 600, 42, 10, s, 'rgba(34,17,60,.86)');
     gateTag(i, 42 + (s ? 10 : 0), y + 8, 26);
     label(t.name + (t.level > 1 ? '  ★' : ''), 80 + (s ? 10 : 0), y + 14, 18, s ? PAL.ink : '#fff', 'left', 900, true);
     label(comboText(t.seq), 80 + (s ? 10 : 0), y + 31, 14, s ? '#2a4a8a' : '#7fe0ff', 'left', 800, true);
@@ -255,7 +265,7 @@ function drawTrialHUD() {
     if (cur) slant(x + 2, y - 10, 280, 20, 6, 'rgba(255,255,255,.12)');
     label(ok ? '✓' : String(k + 1), x + 16, y, 14, ok ? '#7dff9a' : PAL.dim, 'center', 900, true);
     const pre = k > 0 && toks[toks.indexOf(tok) - 1] === 'jc' ? '(jump) ' : '';
-    label(pre + comboText(tok), x + 34, y, 16, ok ? '#7dff9a' : cur ? '#fff' : '#9aa3cc', 'left', 800, true);
+    label(pre + comboText(tok), x + 34, y, 16, ok ? '#7dff9a' : cur ? '#fff' : '#b0a3d2', 'left', 800, true);
     k++;
   });
   ctx.font = font(12.5, 600, false); ctx.fillStyle = PAL.dim; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';

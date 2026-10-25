@@ -1,0 +1,100 @@
+Update 1:
+New
+Three new characters: Gold Ship (Rushdown), Vodka (Vortex), and Daiwa Scarlet (Zoner).
+Control mapping for keyboard and gamepad.
+A Combos page in the in-game move list, and this wiki.
+Gameplay
+EX rework: motion + L and M are the free versions. Motion + H is the EX and costs 50 Spurt. The Skill button no longer does EX.
+The guard button is gone. Block by holding back. Taunt moved to L+H.
+Holding back cancels a dash instantly.
+Walk and dash speeds are closer together, backdash invincibility is shorter (4 frames for most), double jump is gone, and air dash now needs height, can't attack for 8 frames, and has landing recovery.
+Combos: a 9-frame input buffer that remembers your direction and motion, a bit more hitstun on normals, less pushback on hit, easier juggles, higher 5H launchers, and jump cancels only after a launcher.
+Projectiles can now travel at angles, along the ground and from the air. Two can be out at once, and they can be reflected.
+Characters
+Special Week is now an All-Rounder. Guts! is replaced by Last Spurt Tackle, an armored dash.
+Silence Suzuka is now Hit and Run: new Silent Flicker (kick then hop away), Turbine Roll moved to ←↙↓↘→, teleport and double jump removed, +10% damage, 8,500 health.
+
+Update 1.5
+
+Team Spica is complete. Three new characters bring the roster to eight.
+New characters
+Mejiro McQueen (Bait and Punish): long pokes, the Noble Parry counter, and a Punish passive that adds 20% damage on recovering opponents.
+Tokai Teio (Glass Cannon): specials chain into each other on hit for the biggest combos in the game. Least health, no free reversal, and Miracle Mode granting a 15% damage bonus below 30% health.
+Kitasan Black (Shoto): fireball, invincible uppercut, a whirlwind kick on the ground and in the air, and a step-in punch.
+Systems
+New move properties: counter stances, moves that pass through projectiles (several EX moves), special chains and comeback damage.
+The move list shows each character's passive traits.
+
+
+Update 1.6
+New look
+New UI for all menus and the HUD: starting-gate colors, tote-board timers, saddlecloth name plates and rosettes for round wins.
+Added a course select, a VS screen before each match and a results board after it.
+Rounds start with the starting gate opening, and knockouts end in a photo finish.
+Stages
+Three new stages: Tracen Training Track, Nakayama Nights, and Winning Live.
+Music
+Added music.
+P1 picks the battle theme after the course. It defaults to P1's runner. Online, the host picks.
+If a match goes to round 3, the Third Round Theme takes over.
+Music and effects volume are in Options, and you can listen to every track there.
+Combos
+New damage scaling based on the starter, with a 13% drop per hit from the 3rd hit (minimum 25%, supers 50%).
+Added ground bounce (j.H in an air combo) and wall bounce (some EX knockdowns), once each per combo.
+Juggle points, hitstun decay after 2 seconds, and a combo limit of 32 hits or 7 seconds.
+The combo counter shows the scaling for the next hit.
+Training
+New Combo Trials mode with 51 trials and demos.
+Input display, frame meter, and dummy recording in Training.
+CPU
+Rebuilt the CPU. Four levels: Rookie, Normal, Hard, and G1.
+Quality of life
+Rematch from the results screen.
+Random slot on character select.
+Reduce flashes & shake and fullscreen options.
+The online room panel works with a gamepad.
+Menu sounds, plus a bell and gate sound at the start of each round.
+Fixes
+The CPU could super while airborne or right out of hitstun.
+Supers at the end of a combo sometimes only did the first hit.
+The menu music didn't start until you opened a menu.
+Leaving a match during a KO could skip a round win in the next match.
+Some of Teio's frames had a green square behind her.
+
+
+Update 1.7
+
+New
+Uma Versus has a logo and a browser tab icon.
+Daiwa Scarlet
+Number One Finish is now a unique super: a volley of five golden roses and a big finishing rose instead of a rush. Each shot can hit, be blocked, or miss.
+The shots go through normal projectiles, can't be reflected, and don't use juggle points.
+Fixes
+Fixed Gold Ship flying off the top of the screen when Golshi Dropkick!! was cancelled into a super in the air. Same for Suzuka's Silent Flicker.
+Fixed matches getting stuck if a super cinematic was cut short, for example by time running out.
+Fixed matches getting stuck if a projectile hit someone in the middle of a throw.
+Fixed super cinematics near the edge pushing the opponent off the stage.
+Fixed a crash when resetting Training during a super flash.
+Super cinematics now use the character's damage multiplier and Miracle Mode, so Suzuka's and Teio's supers deal proper damage now.
+
+
+Update 1.8
+
+1.8.2
+Fixed a freeze of about a twentieth of a second at the start of each match, when the battle theme loaded. Music now loads in the background after the game opens.
+Hit sounds reuse their audio instead of making new audio on every hit, which cuts down on small stutters mid-fight.
+Winning Live and Nakayama Nights draw their lights and snow with less work per frame.
+Press F3 to show frames per second, frame time, and the worst frame in the last second.
+Same build as 1.8.1, so 1.8.1 and 1.8.2 can play each other online.
+1.8.1
+The Sharp text option is now Graphics: Low / Medium / High in Options and the pause menu. Low is the original 960×540 picture, Medium is sharper, High is full resolution. Medium is the default.
+Smoother frame pacing on 60 Hz screens, and less work per frame on 120 Hz and higher.
+Fixed pressing A (Skill) to confirm a menu or unpause doing a skill as the match starts. A button that's still held from a menu is ignored until you let go.
+Accounts
+Added optional accounts. Sign up from Account on the main menu with an email, password, display name, and favourite runner. Guests can still play online.
+Controls, volume, options, and trial progress save to your account and load when you sign in.
+Online matches are saved to your match history. The Account screen shows your record, win rate, most-played runner and recent results.
+
+Your email is only used to sign in. Display names, favourite runners and online results are public. Settings are private.
+Display
+The game now renders at your screen's resolution, so text and menus are sharper.

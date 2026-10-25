@@ -6,30 +6,36 @@
 //   match end    fade out
 'use strict';
 
-const THEME_IDS = ['spe', 'suz', 'gs', 'vo', 'ds', 'mm', 'tt', 'kb'];
+const THEME_IDS = ['spe', 'suz', 'gs', 'vo', 'ds', 'mm', 'tt', 'kb', 'jp', 'at', 'mc', 'df'];
 const TRACK_TITLE = id => id === 'menu' ? 'MENU THEME' : id === 'round3' ? 'THIRD ROUND THEME' : `${nameOf(id)} THEME`;
 const AUDIO_KEY = 'umavs.audio';
 const Music = {
   els: {}, urls: {}, cur: null, gain: {}, target: {}, rate: {}, vol: 0.7, duck: 1, blocked: false, retryT: 0,
+  // tracks sit in <script type="text/plain" id="mus-…"> blocks after the game code (see build.py)
+  // (null while the page is still arriving, since a block can be half-downloaded)
+  src(id) { if (document.readyState === 'loading') return null; const el = document.getElementById('mus-' + id); return el ? el.textContent : null; },
   url(id) {
     if (this.urls[id]) return this.urls[id];
-    if (typeof MUSIC_DATA === 'undefined' || !MUSIC_DATA[id]) return null;
+    const b64 = this.src(id); if (!b64) return null;
     // not prewarmed yet: decode now (slow, ~30 ms for a full track)
-    const bin = atob(MUSIC_DATA[id]), u8 = new Uint8Array(bin.length);
+    const bin = atob(b64), u8 = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
     return (this.urls[id] = URL.createObjectURL(new Blob([u8], { type: 'audio/mpeg' })));
   },
-  // decode the tracks one at a time in the background so starting a theme never freezes a frame
+  // decode the tracks one at a time in the background, once the page has finished arriving,
+  // so starting a theme never freezes a frame. The menu theme goes first.
   async prewarm() {
-    if (typeof MUSIC_DATA === 'undefined') return;
-    for (const id of Object.keys(MUSIC_DATA)) {
+    if (document.readyState === 'loading') await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));
+    const ids = [...document.querySelectorAll('script.track')].map(el => el.id.slice(4)).sort((a, b) => (b === 'menu') - (a === 'menu'));
+    for (const id of ids) {
       if (this.urls[id]) continue;
       try {
-        const blob = await (await fetch('data:audio/mpeg;base64,' + MUSIC_DATA[id])).blob();
+        const blob = await (await fetch('data:audio/mpeg;base64,' + this.src(id))).blob();
         if (!this.urls[id]) this.urls[id] = URL.createObjectURL(blob);
       } catch (e) { }
       await new Promise(r => setTimeout(r, 50));
     }
+    this.unlock();
   },
   el(id) {
     if (!this.els[id]) {
@@ -41,7 +47,14 @@ const Music = {
   },
   // switch to `id` (null = silence). fadeIn / fadeOut are in seconds.
   play(id, fadeIn = 1.2, fadeOut = 1.2, restart = false) {
-    if (id === this.cur && !restart) { if (id) { this.target[id] = 1; this.rate[id] = 1 / Math.max(1, fadeIn * 60); } return; }
+    if (id === this.cur && !restart) {
+      if (id) {
+        const late = !this.els[id] && this.el(id);   // the track hadn't finished downloading when it was first asked for
+        this.target[id] = 1; this.rate[id] = 1 / Math.max(1, fadeIn * 60);
+        if (late) this.start(late);
+      }
+      return;
+    }
     if (this.cur) { this.target[this.cur] = 0; this.rate[this.cur] = 1 / Math.max(1, fadeOut * 60); }
     this.cur = id;
     if (!id) return;
@@ -71,7 +84,7 @@ const Music = {
 
 // ---------------------------------------------------------------- director
 const MD = { pRef: null, lastRound: 0, battle: null, jukebox: null };
-const MENU_SCREENS = ['title', 'mode', 'select', 'stage', 'replays', 'controls', 'moves', 'online', 'netselect', 'sound', 'account'];
+const MENU_SCREENS = ['friends', 'leaders', 'title', 'mode', 'select', 'stage', 'replays', 'repwarn', 'arcladder', 'arcwin', 'arccont', 'arcover', 'arcdone', 'controls', 'moves', 'online', 'netselect', 'sound', 'account'];
 function decidingRound() { return G.p.length === 2 && G.p[0].wins === 1 && G.p[1].wins === 1; }
 function musicDirector() {
   Music.duck = UI.paused || (G.mode === 'online' && Net.menu) ? 0.4 : 1;
@@ -79,8 +92,10 @@ function musicDirector() {
   if (s === 'sound') { Music.play(MD.jukebox || 'menu', 0.6, 0.6); Music.tick(); return; }
   if (s === 'music') { Music.play(UI.musicIdx === undefined ? 'menu' : THEME_IDS[UI.musicIdx], 0.8, 0.8); Music.tick(); return; }   // preview
   if (MENU_SCREENS.includes(s)) { MD.pRef = null; Music.play('menu', 1.5, 1.2); Music.tick(); return; }
-  if (s === 'vs') { Music.play(null, 1, 1.4); Music.tick(); return; }
-  if (s === 'game' || s === 'replay') {
+  if (s === 'vs' || s === 'arcvs') { Music.play(null, 1, 1.4); Music.tick(); return; }
+  if (s === 'arcend') { Music.play(ARC.cid, 1.5, 1); Music.tick(); return; }
+  if (s === 'spectate' && !SPEC.live) { Music.play('menu', 1.5, 1.2); Music.tick(); return; }
+  if (s === 'game' || s === 'replay' || s === 'spectate') {
     const theme = G.music || (G.p[0] && G.p[0].cid) || 'spe';
     const fresh = MD.pRef !== G.p;                      // a new match started (or a replay was loaded)
     if (fresh) { MD.pRef = G.p; MD.lastRound = 0; }

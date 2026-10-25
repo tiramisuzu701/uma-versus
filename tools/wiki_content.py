@@ -8,7 +8,7 @@ import json, html
 D = json.load(open(ROOT+'/build/wiki/wiki_data.json'))
 CB = json.load(open(ROOT+'/build/wiki/wiki_combos.json'))
 BUILD = D['build']
-ORDER = ['spe', 'suz', 'gs', 'vo', 'ds', 'mm', 'tt', 'kb']
+ORDER = ['spe', 'suz', 'gs', 'vo', 'ds', 'mm', 'tt', 'kb', 'jp', 'at', 'mc', 'df']
 E = html.escape
 ARROW = {'1': '↙', '2': '↓', '3': '↘', '4': '←', '6': '→', '7': '↖', '8': '↑', '9': '↗'}
 arrows = lambda mo: ''.join(ARROW.get(ch, ch) for ch in mo)
@@ -42,7 +42,7 @@ NORMAL_ORDER = ['5L', '5M', '5H', '2L', '2M', '2H', '6M', 'jL', 'jM', 'jH', 'dL'
 
 # ------------------------------------------------------------------ written content
 ARCH = {
-  'ALL-ROUNDER': ('A bit of everything', "Has something for every range: a projectile, an anti-air, a way in and a way out. Rarely loses a matchup outright, rarely wins one on paper. Good for learning the game."),
+  'ALL-ROUNDER': ('A bit of everything', "Has something for every range: a projectile, an anti-air, a way in and a way out. Few matchups are bad for her, and few are good. Good for learning the game."),
   'HIT AND RUN': ('Get in, get out', "Darts in for one hit and leaves before you can answer. Big damage and great escape tools, but low health and not much to do once she's cornered."),
   'RUSHDOWN': ('Stay in their face', "Fast attacks that are plus on block and ways to keep going after a blocked string. Wants to start pressure and never stop. Has a hard time at long range."),
   'VORTEX': ('Knock down, make them guess', "Gets a knockdown that takes away the opponent's wake-up options, then runs a mixup. Guess wrong and you're back on the floor for another one."),
@@ -50,20 +50,24 @@ ARCH = {
   'GLASS CANNON': ('Win fast or lose fast', "Turns one opening into huge damage, but has the least health in the game and barely any defense. Rounds can end in two combos either way."),
   'SHOTO': ('The classic kit', "Fireball, invincible uppercut, an advancing attack. The Ryu and Ken formula: easy to pick up, solid everywhere, a little predictable."),
   'ZONER': ('Control the screen', "Keeps you out with projectiles at different angles and speeds. Low damage, so she wins by chipping away and never letting you in."),
+  'GRAPPLER': ('Get close, then grab', "Command grabs that can't be blocked or teched and do huge damage. Lots of health and armor to get in, but slow, and she has to walk through your whole game plan to reach you."),
+  'SET-PLAY': ('Set traps, then fight around them', "Puts things on the screen that go off later. Strong once her setup is out, weak while she's building it and on defence."),
+  'PUPPET': ('Two bodies at once', "Controls a second fighter. Her skills send the puppet to attack while she does something else, so she can hit you from two places at once. Lose the puppet and she loses most of her offence."),
+  'FOOTSIES': ('Win the space', "Walks in and out at the edge of her range, waiting for you to whiff, then punishes. Fast feet and a poke that turns into a combo, but not much defence once you're in."),
 }
 CHAR = {
   'spe': {
     'plan': ["Special Week has an answer at every range. Dream Shot covers midscreen, Rising Dream stops jump-ins, Spurt Tornado travels in over low pokes and Last Spurt Tackle armors through a hit or a fireball to close the gap.",
              "Her game plan is whatever beats your opponent. Against zoners, walk in behind L Dream Shot and Tackle through their shots. Against rushdown, block and look for a Rising Dream reversal."],
     'strong': ['A tool for every situation', 'EX Rising Dream is fully invincible', 'Simple combos that end in a knockdown'],
-    'weak': ['Specialists beat her at their own game', 'Rising Dream and Tackle are very punishable on block'],
+    'weak': ['Each specialist does her own job better', 'Rising Dream and Tackle are very punishable on block'],
     'tips': ['L Dream Shot is slow enough to walk or dash in behind.', 'L Rising Dream is less invincible but recovers faster. Use M or EX to beat a meaty.', 'Tackle absorbs one hit, fireballs included. EX absorbs two.'],
   },
   'suz': {
     'plan': ["Land one hit and leave. M Great Escape runs through the opponent and keeps going, and Silent Flicker kicks and then hops way back, so a lot of her moves are minus on paper but safe because she's out of range.",
-             "She hits harder than anyone except Teio (×1.1) and she's fast, with a quick dash, a long invincible backdash and the only air dash in the game. The catch is 8,500 health and a weak reversal. Don't get cornered."],
-    'strong': ['×1.1 damage, second only to Teio', 'Moves that leave her out of punish range', 'Air dash and a long invincible backdash'],
-    'weak': ['Second-lowest health (8,500)', "Lead the Pack barely has any invincibility, L especially", "Not much to do once she's pinned in the corner"],
+             "She hits harder than anyone except Teio (×1.1) and she's fast, with a quick dash, a long backdash and the only air dash in the game. The catch is 9,000 health and a reversal that only covers its first few frames. Don't get cornered."],
+    'strong': ['×1.1 damage, second only to Teio', 'Moves that leave her out of punish range', 'Air dash and the longest backdash'],
+    'weak': ['Below-average health (9,000)', "Lead the Pack's invincibility ends early, L especially", "Not much to do once she's pinned in the corner"],
     'tips': ['L Great Escape stops in front, M runs through. Mix them up so they can\'t punish on reaction.', 'Blocked M Silent Flicker leaves you about 240 px away (200 for L, 270 for EX). Very few moves reach that.', 'Air dash needs some height, and landing out of it has 7 frames of recovery.'],
   },
   'gs': {
@@ -76,9 +80,9 @@ CHAR = {
   'vo': {
     'plan': ["Everything starts with a hard knockdown: Full Throttle, Pit Stop, or EX Drift Hop and EX Drift Drop. No quick rise means the opponent always gets up on the same frame, so her setups always line up.",
              "Then make them guess. L Drift Hop lands in front, M crosses over. Meaty 2L is low, Drift Drop and j.M are overheads, and a walk-up Pit Stop beats blocking. Guess wrong and it's another hard knockdown."],
-    'strong': ['Consistent setups after hard knockdowns', 'j.L and j.M cross up', "Command grab that can't be teched"],
+    'strong': ['Consistent setups after hard knockdowns', 'j.L and j.M cross up', "Command grab that only Counter Spurt escapes"],
     'weak': ["Rev Kick only beats air attacks. It isn't invincible on the ground", 'Average neutral. She has to earn that first knockdown', 'Gets readable if you run the same mixup every time'],
-    'tips': ['After Full Throttle the opponent is down for exactly 34 frames. Practice the timing in Training.', 'M Drift Hop is an overhead and a cross-up at once.', 'Pit Stop leaves them right next to you for the next mixup.'],
+    'tips': ['After Full Throttle the opponent is down for exactly 34 frames. Practice the timing in Training.', 'M Drift Hop is an overhead and a cross-up at once.', 'Pit Stop leaves them right next to you for the next mixup. It starts on frame 6, so a jump or backdash on wake-up gets out of it.'],
   },
   'mm': {
     'plan': ["McQueen wants you to move first. 5M and Stayer's Lance outrange almost everything, so walking at her is risky, and swinging at her up close might run into Noble Parry.",
@@ -101,12 +105,40 @@ CHAR = {
     'weak': ['Predictable once people learn her', 'Matsuri Uppercut is very punishable on block', 'No armor or counter tools'],
     'tips': ['L Festival Drum is slow enough to walk behind.', 'Sky Whirlwind is an overhead and changes your jump arc.', 'Kitasan Straight is only a little minus. End blocked strings with it.'],
   },
+  'jp': {
+    'plan': ["Jungle Pocket wants to be right next to you, and when she is, you have to guess. Pocket Buster (→S) is a command grab that does 1,500 (1,750 EX) and can't be blocked or teched. If you block, she grabs. If you try to jump or press a button, her normals and Lion Charge are waiting.",
+             "Getting in is the hard part. She walks slowly, but she has the most health in the cast (11,000), Lion Charge armors through a poke, Jungle Rush grabs from half a screen away, and Wild Catch grabs people out of the air. Her super is a grab too, and it can catch someone in hitstun, so it doubles as a combo ender."],
+    'strong': ['Command grabs that can\'t be blocked or teched', 'Most health (11,000)', 'Anti-air grab and an armored charge to get in'],
+    'weak': ['Slowest walk speed', "Command grabs whiff on anyone jumping, backdashing or in hitstun", 'Very punishable if a grab whiffs'],
+    'tips': ['Grabs beat blocking. Once they start jumping to escape, use Wild Catch or 2H instead.', 'Lion Charge absorbs one hit (two with EX). Use it through pokes and fireballs.', "L Pocket Buster has less reach but recovers faster when it misses."],
+  },
+  'at': {
+    'plan': ["Agnes Tachyon fills the floor with potions. Test Tube Toss lobs one that lands and stays as a trap, Delayed Reaction sets a flask that goes off on a timer, and Catalyst sets every potion off at once. Up to three can be out.",
+             "Potions arm a moment after they land, then burst when the opponent steps on one. That makes walking forward dangerous, and a knockdown next to a potion is a big setup. The answer is to pop them: any attack or projectile that touches a potion breaks it harmlessly. Her own defence is weak, with no invincible reversal unless she spends meter."],
+    'strong': ['Controls where the opponent can walk', 'Catalyst lets her set off potions whenever she wants', 'Strong setups after a knockdown'],
+    'weak': ['Low health (9,000)', 'Overdose Spark only beats air attacks without meter', 'Slow to set up, and any hit pops a potion'],
+    'tips': ['L Test Tube Toss lands close and can hit them in a combo. M lands farther away as a trap.', 'Delayed Reaction on a knocked-down opponent goes off as they get up.', "Bursts are blocked by holding away from Tachyon, wherever the potion is. Block them like any other attack."],
+  },
+  'mc': {
+    'plan': ["Manhattan Cafe's skills send her Friend, Sunday Silence, to attack for her. Phantom Rush charges across the screen, Shadow Sweep is a low, Night Drop falls from above as an overhead, and Rising Shade is an anti-air. Cafe recovers almost right away, so she can attack at the same time.",
+             "That means a low from Cafe and an overhead from the Friend at once, or a Friend rush that keeps you blocking while Cafe walks in. The Friend takes one command at a time and has to come back before the next. Hitting her while she attacks sends her away, and Cafe is much weaker without her."],
+    'strong': ['Attacks from two places at once', 'High-low mixups with the Friend', 'Recovers early from every skill'],
+    'weak': ['Hit the Friend and Cafe loses her offence', 'No invincible reversal without meter', 'One command at a time'],
+    'tips': ['Night Drop takes a moment to fall, so time it with a low from Cafe.', 'Phantom Rush hits after Cafe has recovered, so you can link 5M after it.', 'EX skills make Cafe invincible as well.'],
+  },
+  'df': {
+    'plan': ["Dantsu Flame wins the space in front of her. She has the fastest walk in the cast, a quick dash and backdash, and normals that recover fast, so she can step into range, poke, and step back out before you answer.",
+             "Flame Thrust (S) is her signature: a long poke that's safe on block at the tip. If it hits, press S again for Flame Twist, which launches into a combo. Whiff a button near her and she punishes with it from range. The Cheese Wheel rolls in low over a short distance, so it controls the ground in front of her instead of zoning."],
+    'strong': ['Fastest walk speed (4.0)', 'A poke that turns into a combo on hit', 'Footwork (→S) steps in or out in an instant'],
+    'weak': ['Fromage Rising only beats air attacks without meter', "Average health and no armor", 'Needs to win neutral to get anything'],
+    'tips': ['Only press S for Flame Twist when Flame Thrust hits. On block it never comes out.', 'EX Cheese Wheel adds a cheese wedge in an arc, so it covers a jump and the ground at once.', 'EX Footwork goes right through them to the other side.'],
+  },
   'ds': {
     'plan': ["Daiwa keeps you where she wants you. Scarlet Shot goes straight and she can have two out, High Top Line angles up to stop jumps, Ground Rose runs along the floor and Sky Shot fires down from the air.",
-             "Rose Barrier reflects projectiles and knocks away anyone too close, which puts them back at shooting range. She has the lowest damage in the cast (×0.88) and a slow dash, so she wins by chipping away."],
+             "Rose Barrier reflects projectiles and knocks away anyone too close, which puts them back at shooting range. She has the lowest damage in the cast (×0.95) and a slow dash, so she wins by chipping away."],
     'strong': ['Projectiles at four different angles', 'Reflector that also pushes people out', 'Long normals and a good backdash'],
-    'weak': ['Lowest damage (×0.88)', 'Slowest dash', 'In trouble once someone gets in'],
-    'tips': ["Mix Ground Rose (low) with Scarlet Shot (mid) so they can't just block one way.", 'L High Top Line is flatter and covers a forward jump. M is steeper for jumps from closer in.', 'EX Rose Barrier has the longest reflect window.', 'Number One Finish is a volley, not a rush. Use it to punish a whiff or a dash from midrange, or to end a combo.'],
+    'weak': ['Lowest damage (×0.95)', 'Slowest dash', 'In trouble once someone gets in'],
+    'tips': ["Mix Ground Rose (low) with Scarlet Shot (mid) so they can't just block one way.", 'L High Top Line is flatter and covers a forward jump. M is steeper for jumps from closer in.', 'EX Rose Barrier has the longest reflect window.', 'Number One Finish fires a volley of shots. Use it to punish a whiff or a dash from midrange, or to end a combo.'],
   },
 }
 
@@ -130,9 +162,9 @@ SYSTEMS = f"""
   <ul>
   <li>Hold back to block, and down-back to block lows. Overheads (jumping attacks, hops, dive kicks) have to be blocked standing.</li>
   <li>Holding back during a dash cancels it, so you can block straight out of one.</li>
-  <li>L+M up close throws, and holding back throws the other way. Throws beat blocking. Press L+M as a throw connects to tech it. Command grabs can't be teched.</li>
+  <li>L+M up close throws, and holding back throws the other way. Throws beat blocking, but you can't combo after a normal throw. Press L+M as a throw connects to tech it. Command grabs ignore L+M, but S+H as one connects breaks it with Counter Spurt (50 Spurt).</li>
   <li><b>Counter Spurt</b>: S+H while blocking. Costs 50 Spurt and knocks them away.</li>
-  <li>Backdash (←←) has a few invincible frames.</li>
+  <li>Backdash (←←) gets you out of throws, but it isn't invincible to attacks, so a quick hit still catches it, especially in the corner.</li>
   <li>While knocked down, hold any attack button to get up early or hold ↓ to get up late. You can't do either after a hard knockdown (throws, command grabs, supers and some skills like Vodka's Full Throttle).</li>
   </ul>
 
@@ -165,6 +197,7 @@ SYSTEMS = f"""
   <h2>Movement</h2>
   <ul>
   <li>Double-tap → to dash, ←← to backdash. L, M or H during a dash (or →→ + button) is a dash attack: L jab, M lunge, H leaping overhead kick.</li>
+  <li>You can also bind a <b>Dash</b> button in Controls. It types →→ for you (← + Dash for a backdash), and Dash + L/M/H does a dash attack.</li>
   <li>→+M is a hop overhead. You're briefly airborne, so lows beat it.</li>
   <li>Only Silence Suzuka can air dash. She needs some height, can't attack for the first 8 frames, and has landing recovery.</li>
   </ul>
@@ -173,7 +206,9 @@ SYSTEMS = f"""
   <ul>
   <li>Accounts are optional and guests can play every mode. Make one from <b>Account</b> on the main menu.</li>
   <li>Your display name shows up for your opponent online.</li>
-  <li>Controls, volume, Options and combo trial progress are saved to your account and come back when you sign in somewhere else.</li>
+  <li>Controls, volume, Options, combo trial, tutorial and Arcade progress are saved to your account and come back when you sign in somewhere else.</li>
+  <li><b>Friends</b>: add someone by display name. Once you've both added each other you can see when they're online and invite them to your room.</li>
+  <li><b>Leaderboards</b> rank players by online wins, win rate and matches. Only matches both players recorded count.</li>
   <li>Online matches you finish while signed in are saved, and the Account screen shows your record, win rate and most-played runner. VS CPU matches aren't counted.</li>
   </ul>
 
@@ -184,7 +219,10 @@ SYSTEMS = f"""
   <li><b>Dummy recording</b>: 7 to take control of the dummy and record up to 10 seconds, 7 again to stop, then 8 to have it loop while you practice.</li>
   <li><b>Combo trials</b> has every runner's combos as challenges, with a demo on 9. Cleared trials are saved.</li>
   <li><b>Replays</b>: every Versus, VS CPU and online match is recorded. R on the results screen watches it, D saves the file.</li>
-  <li><b>Online</b> uses rollback netcode and room codes. Both players need the same build, and this wiki is for build <b class="mono">{BUILD}</b>.</li>
+  <li><b>Tutorial</b> walks through the basics in seven short lessons, from walking to supers, and checks each step as you do it.</li>
+  <li><b>Arcade</b> is seven CPU races that get harder, then your runner's rival as the final race, then her ending. Clear times are saved.</li>
+  <li><b>Online</b> uses rollback netcode and room codes. Hosts can list their room so anyone can find it, and let people watch. Both players need the same build, and this wiki is for build <b class="mono">{BUILD}</b>.</li>
+  <li><b>Colours</b>: every runner has six colour palettes. Press ↑ ↓ on character select (M in the online lobby).</li>
   </ul>
   </div>
 </section>"""

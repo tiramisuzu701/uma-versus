@@ -2,7 +2,7 @@
 // online match history. Doesn't touch the sim.
 'use strict';
 
-const SYNC_KEYS = ['umavs.controls', 'umavs.audio', 'umavs.settings', 'umavs.trials', 'umavs.picks'];
+const SYNC_KEYS = ['umavs.controls', 'umavs.audio', 'umavs.settings', 'umavs.trials', 'umavs.picks', 'umavs.tutorial', 'umavs.arcade'];
 const SYNC_AT_KEY = 'umavs.sync.at';
 const ACCT = {
   on: false, client: null, user: null, profile: null, stats: null, recent: [],
@@ -106,6 +106,8 @@ function acctApply(data) {
   try { Music.load(); } catch (e) { }
   try { Object.assign(SET, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (e) { }
   try { trialDone = JSON.parse(localStorage.getItem(TRIAL_KEY) || '{}'); } catch (e) { }
+  try { tutDone = JSON.parse(localStorage.getItem(TUT_KEY) || '[]'); } catch (e) { }
+  try { ARC.rec = JSON.parse(localStorage.getItem(ARC_KEY) || '{}'); } catch (e) { }
 }
 async function acctPull() {
   if (!acctOn()) return;
@@ -193,7 +195,7 @@ function initAcctPanel() {
 // entering the screen from the main menu
 function acctOpen() { UI.screen = 'account'; ACCT.idx = 0; ACCT.status = ''; if (!ACCT.on) acctPanel('off'); else if (!ACCT.user) acctPanel('form'); else { acctPanel(null); acctRefresh(); } }
 // signed-in screen: gamepad / keyboard rows
-const ACCT_ROWS = ['fav', 'name', 'sync', 'out', 'back'];
+const ACCT_ROWS = ['fav', 'name', 'friends', 'leaders', 'sync', 'out', 'back'];
 function acctScreenTick(e, enter, esc) {
   if (AP.mode) { if (esc || (e.H && !document.activeElement.matches('#acct input, #acct select'))) acctLeave(); return; }   // the panel handles typing itself
   if (!ACCT.user) { acctPanel(ACCT.on ? 'form' : 'off'); return; }
@@ -203,6 +205,8 @@ function acctScreenTick(e, enter, esc) {
   if (row === 'fav' && (e.l || e.r) && ACCT.profile) { const i = ROSTER.indexOf(ACCT.profile.fav_runner); acctSetFav(ROSTER[(i + (e.r ? 1 : ROSTER.length - 1)) % ROSTER.length]); Sfx.play('menu'); }
   if (e.L || e.S || enter) {
     if (row === 'name') { Sfx.play('ok'); acctPanel('rename'); }
+    if (row === 'friends') { Sfx.play('ok'); friendsOpen('account'); }
+    if (row === 'leaders') { Sfx.play('ok'); leadersOpen('account'); }
     if (row === 'sync') { Sfx.play('ok'); acctSay('Saving…'); acctPush(true).then(() => acctSay('Settings saved to your account.')); }
     if (row === 'out') acctSignOut();
     if (row === 'back') acctLeave();

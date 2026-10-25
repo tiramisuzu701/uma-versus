@@ -13,13 +13,14 @@ const ROUND_TIME = 99;
 let rs = 1;
 const rnd = () => ((rs = (Math.imul(rs, 1664525) + 1013904223) >>> 0) / 4294967296);
 
+const PALETTE_COUNT = 6;   // see PALETTES in render.js
 const NEUTRAL = { u: 0, d: 0, l: 0, r: 0, L: 0, M: 0, H: 0, S: 0 };
 const BTNS = ['L', 'M', 'H', 'S'];
 
 // -------------------------------------------------------------------- Fighter
 class Fighter {
-  constructor(side, cid, alt) {
-    this.side = side; this.cid = cid; this.alt = alt; this.c = CHARS[cid];
+  constructor(side, cid, pal) {
+    this.side = side; this.cid = cid; this.pal = pal || 0; this.c = CHARS[cid];
     this.wins = 0;
     this.reset();
   }
@@ -44,7 +45,11 @@ class Fighter {
     this.trail = [];
     this.cd = {}; this.hist = []; this.simple = false; this.hardKd = false;
     this.upBuf = 0; this.dashTap = false; this.bdashTap = false; this.hitOK = false;
-    this.walkDir = 0; this.prevState = ''; this.jumpBoost = 1; this.crouchHit = false; this.guarding = false; this.airAct = 0; this.adDir = 0; this.gold = 0; this.throwDmg = 1300; this.noTech = false; this.dashBuf = 0; this.hitLvl = 0; this.adLand = false; this.throwVx = 6; this.dashMin = 0; this.launched = false; this.chainUsed = []; this.miracle = false; this.prorate = 1; this.comboT = 0; this.gbUsed = false; this.wbUsed = false; this.bounce = null; this.limitHit = false;
+    this.walkDir = 0; this.prevState = ''; this.jumpBoost = 1; this.crouchHit = false; this.guarding = false; this.airAct = 0; this.adDir = 0; this.gold = 0; this.throwDmg = 1300; this.noTech = false; this.dashBuf = 0; this.hitLvl = 0; this.adLand = false; this.throwVx = 6; this.dashMin = 0; this.launched = false; this.chainUsed = []; this.miracle = false; this.prorate = 1; this.comboT = 0; this.gbUsed = false; this.wbUsed = false; this.bounce = null; this.limitHit = false; this.throwAnimCur = null;
+    if (c.puppet) {   // Manhattan Cafe's Friend (Sunday Silence): a second body, see updatePuppet
+      this.pupX = this.x - this.facing * 48; this.pupY = GY; this.pupF = this.facing; this.pupState = 'idle'; this.pupT = 0;
+      this.pupMove = null; this.pupHit = 0; this.pupCd = 0; this.pupSimple = false;
+    }
   }
   get grounded() { return this.y >= GY && !['air', 'airHit', 'airdash'].includes(this.state) && !(this.state === 'attack' && this.move.air); }
   get airborne() { return this.y < GY || this.state === 'air' || this.state === 'airHit' || this.state === 'airdash' || (this.state === 'attack' && this.move && this.move.air); }
@@ -96,10 +101,17 @@ const G = {
   training: { dummy: 'stand', block: 'none', meter: true, cpuLevel: 2 },
 };
 
-function startMatch(mode, c1, c2) {
+// colour palettes for a match: a mirror match on the same colours gives P2 the next one
+function matchPals(c1, c2, pals) {
+  const a = (pals && pals[0]) | 0; let b = (pals && pals[1]) | 0;
+  if (c1 === c2 && a === b) b = (b + 1) % PALETTE_COUNT;
+  return [a, b];
+}
+function startMatch(mode, c1, c2, pals) {
   G.mode = mode; rs = 7;
-  const alt = c1 === c2;
-  G.p = [new Fighter(0, c1, false), new Fighter(1, c2, alt)];
+  const [a, b] = matchPals(c1, c2, pals);
+  G.p = [new Fighter(0, c1, a), new Fighter(1, c2, b)];
+  if (typeof warmPalettes === 'function') warmPalettes();   // build colour sheets now, not mid-round (drawing only, not sim state)
   G.p[0].meter = G.p[1].meter = 0;
   G.round = 1;
   startRound();
@@ -108,7 +120,9 @@ function startRound() {
   for (const p of G.p) { const m = p.meter; p.reset(); p.meter = m; }
   if (G.mode === 'training') { for (const p of G.p) { p.setState('idle'); p.meter = 100; } G.phase = 'fight'; }
   else G.phase = 'intro';
+  for (const p of G.p) if (p.boss) p.meter = 100;   // Arcade's final rival starts every round with full Spurt
   G.phaseT = 0; G.projs = []; G.fx = []; G.texts = []; G.freeze = 0; G.timer = ROUND_TIME; G.timerSub = 0;
+  if (typeof calloutsReset === 'function') calloutsReset();
   G.cam = STAGE_W / 2; G.adv = null; G.flashOwner = null; G.slow = 0; G.posed = false; G.koType = null; G.roundWinner = -1;
 }
 
@@ -136,13 +150,14 @@ function invulnerable(p, fromAir) {
     if (m.inv && p.t >= m.inv[0] && p.t <= m.inv[1]) return true;
     if (fromAir && m.aaInv && p.t >= m.aaInv[0] && p.t <= m.aaInv[1]) return true;
   }
-  if (p.state === 'backdash' && p.t <= ((p.c.backdash && p.c.backdash.inv) || 4)) return true;
   if (p.state === 'cine' || p.state === 'throwing') return true;
   if (p.state === 'airHit' && p.jug >= JUG_MAX) return true;
   return false;
 }
 
 function addText(txt, x, y, color, size = 28, life = 50) { if (G.resim) return; G.texts.push({ txt, x, y, color, size, life, t: 0 }); }
+// side callouts (INVINCIBLE, PUNISH! ...): drawn by the UI, never read by the simulation
+function callout(p, text, kind) { if (G.resim || typeof pushCallout !== 'function') return; pushCallout(p.side, text, kind); }
 // Visual effects. None of this is game state: it's skipped during rollback
 // re-simulation and never read by the simulation, so replays/netplay stay exact.
 const ATTACHED_FX = ['speed', 'spiral', 'streak', 'dustTrail'];
@@ -229,7 +244,9 @@ function techMove(p, id, btn) {
   if (btn === 'L') return p.c.moves[id + '.L'] ? id + '.L' : id;
   return id;
 }
-function techOK(p, id) { return !projBlocked(p, id) && !(p.c.moves[id].cdAlways && !skillReady(p, id)); }
+// the Friend takes one command at a time: she has to be back beside Cafe first
+function pupBusy(p, id) { const m = p.c.moves[id]; return !!(m && m.pup && p.pupState !== 'idle'); }
+function techOK(p, id) { return !projBlocked(p, id) && !pupBusy(p, id) && !(p.c.moves[id].cdAlways && !skillReady(p, id)); }
 
 // ---------------------------------------------------------------- Actions
 function startMove(p, id, tech) {
@@ -241,7 +258,8 @@ function startMove(p, id, tech) {
     p.meter -= 50; p.flash = 6; G.freeze = Math.max(G.freeze, 5);
     addText('EX', p.x, GY - 185, '#ffd24a', 24, 26); spark(p.x, GY - 90, 'armor', 1, 0); Sfx.play('power');
   } else if (m.kind === 'special' && tech && !m.followOf) addText('TECH', p.x, GY - 175, '#9ff', 13, 18);
-  if (m.kind === 'gc') { p.meter -= 50; p.flash = 8; addText('COUNTER SPURT', p.x, GY - 210, p.c.color, 22, 40); Sfx.play('power'); }
+  if (m.kind === 'gc') { p.meter -= 50; p.flash = 8; callout(p, 'COUNTER SPURT', 'spurt'); Sfx.play('power'); }
+  else if (m.inv && m.inv[0] <= 5 && m.kind !== 'super') callout(p, 'INVINCIBLE', 'def');
   p.armorLeft = m.armor ? (m.armorHits || 1) : 0;
   if (m.kind === 'super') {
     p.meter -= 100; G.freeze = 38; G.flashOwner = p; G.flashT = 0; Sfx.play('super');
@@ -281,6 +299,7 @@ function tryAttack(p) {
       p.take('S');
       if (id === 'jS' && p.airS) return false;
       if (projBlocked(p, id)) return false;
+      if (pupBusy(p, id)) { addText(p.pupState === 'away' ? 'FRIEND IS AWAY' : 'FRIEND BUSY', p.x, GY - 175, '#b9a6e6', 13, 20); return false; }
       if (!skillReady(p, id)) { addText('COOLDOWN', p.x, GY - 175, '#99a', 13, 20); return false; }
       return startMove(p, id);
     }
@@ -434,7 +453,7 @@ function updateFighter(p) {
     case 'attack': {
       const m = p.move;
       // follow-ups (e.g. Golshi Rush): press a button during the window to branch
-      if (m.follow && p.t >= m.follow.win[0] && p.t <= m.follow.win[1]) {
+      if (m.follow && p.t >= m.follow.win[0] && p.t <= m.follow.win[1] && (!m.follow.onHit || p.hitOK)) {
         const fb = ['S', 'H', 'M', 'L'].find(b => p.has(b) && m.follow[b]);
         if (fb) {
           p.take(fb);
@@ -512,6 +531,7 @@ function updateFighter(p) {
       if (p.t === 26) {
         o.comboDmg = 0; dealDamage(p, o, p.throwDmg, 1); o.combo = 1; noteDamage(o, p.throwDmg);
         o.setState('airHit'); o.kd = true; o.hardKd = true; o.vx = p.throwVx * p.facing; o.vy = -9; o.y = GY - 1;
+        if (!p.noTech) o.jug = JUG_MAX;   // a normal throw can't be comboed off, corner or not (command grabs keep their follow-ups)
         spark(o.x, GY - 90, 'hit', 2, p.facing, p); G.freeze = 10; G.shake = 8; Sfx.play('heavy'); o.hitLvl = 2;
         contact(p, o);
       }
@@ -520,11 +540,16 @@ function updateFighter(p) {
     }
     case 'thrown':
       if (o.state !== 'throwing') { p.setState('airHit'); p.kd = true; p.vy = -4; p.vx = 0; p.y = Math.min(p.y, GY - 1); break; }   // throw got interrupted
-      p.x = o.x + o.facing * 62;
+      p.x = o.x + o.facing * 62; if (p.y < GY) p.y = Math.min(GY, p.y + 14);
       if (p.t <= 10 && !o.noTech && p.takeBoth('L', 'M')) { // tech!
         p.setState('tech'); o.setState('tech');
         p.vx = -8 * o.facing; o.vx = 8 * o.facing;
-        addText('THROW TECH', (p.x + o.x) / 2, GY - 210, '#9cf', 24); spark((p.x + o.x) / 2, GY - 90, 'block', 2, 0); Sfx.play('block');
+        callout(p, 'THROW ESCAPE', 'def'); spark((p.x + o.x) / 2, GY - 90, 'block', 2, 0); Sfx.play('block');
+      } else if (p.t <= 10 && o.noTech && p.meter >= 50 && p.takeBoth('S', 'H')) {   // Counter Spurt breaks a command grab
+        p.meter -= 50; p.flash = 8;
+        p.setState('tech'); o.setState('tech');
+        p.vx = -10 * o.facing; o.vx = 10 * o.facing;
+        callout(p, 'GRAB BREAK', 'spurt'); spark((p.x + o.x) / 2, GY - 90, 'armor', 2, 0); Sfx.play('power');
       }
       break;
     case 'tech':
@@ -564,7 +589,7 @@ function doEvent(p, ev) {
     p.facing = o.x >= p.x ? 1 : -1;
   }
   if (ev === 'gold' || ev === 'goldEx') {
-    p.gold = ev === 'goldEx' ? 600 : 360; p.flash = 10; Sfx.play('power');
+    p.gold = ev === 'goldEx' ? 600 : 360; p.flash = 10; Sfx.play('power'); callout(p, 'GOLSHI MODE', 'spurt');
   }
   if (ev === 'taunt') {
     p.meter = Math.min(100, p.meter + 8);
@@ -575,23 +600,105 @@ function doEvent(p, ev) {
     // projectile position is its CENTER; box is relative to the center
     G.projs.push({ owner: p.side, simple: p.simple, style: pj.style || 'wind', hitsLeft: pj.hits || 1, cool: 0,
       x: p.x + p.facing * (pj.x0 ?? 60), y: p.y + (pj.y0 ?? -92), facing: p.facing, vx: pj.vx * p.facing, vy: pj.vy || 0,
-      life: pj.life, box: pj.box, hit: pj.hit, t: 0, dead: false, sup: !!pj.sup, size: pj.size || 1 });
+      life: pj.life, box: pj.box, hit: pj.hit, t: 0, dead: false, sup: !!pj.sup, size: pj.size || 1,
+      grav: pj.grav || 0, roll: pj.roll || 0, trap: pj.trap || null, phase: pj.trap ? 'fly' : null });
     Sfx.play(pj.sup ? (pj.size > 1 ? 'heavy' : 'whoosh') : 'wind');
   }
+  if (ev === 'detonate') {   // set traps go off right now
+    let n = 0;
+    for (const q of G.projs) if (q.owner === p.side && q.trap && q.phase === 'set') { trapBoom(q); n++; }
+    if (n) addText('DETONATE!', p.x, GY - 200, p.c.look.fxColor, 20, 30);
+  }
+  if (ev === 'pup') pupStart(p);
 }
 
 function tryGrab(p) {
-  const o = opp(p);
-  if (Math.abs(o.x - p.x) > p.move.range || o.airborne || !hurtbox(o)) return;
-  if (['hit', 'block', 'down', 'wake', 'airHit', 'thrown', 'throwing', 'cineHit', 'jsquat', 'backdash'].includes(o.state)) return;
+  const o = opp(p), m = p.move;
+  if (Math.abs(o.x - p.x) > m.range || !hurtbox(o)) return;
+  if (m.grabAir) {   // anti-air grab: only catches someone in the air (jumping, or attacking from a jump), within reach above
+    if (!o.airborne || !['air', 'airdash', 'attack', 'backdash'].includes(o.state) || p.y - o.y > (m.grabH || 200)) return;
+  } else if (o.airborne) return;
+  const stun = m.grabStun && o.state === 'hit';   // Wild Typhoon also catches someone in hitstun, so it ends combos
+  if (!stun && (['hit', 'block', 'down', 'wake', 'airHit', 'thrown', 'throwing', 'cineHit', 'cine', 'jsquat'].includes(o.state) || (!m.grabAir && o.state === 'backdash'))) return;
+  if (m.cine) {   // grab super: the catch starts the cinematic (inside a combo the damage keeps scaling)
+    p.setState('cine'); p.cs = 0; o.setState('cineHit'); o.x = Math.max(40, Math.min(STAGE_W - 40, p.x + p.facing * 70)); if (!stun) { o.combo = 0; o.comboDmg = 0; }
+    spark(o.x, GY - 90, 'super', 2, p.facing); G.freeze = 12; Sfx.play('grab'); Sfx.play('heavy'); p.connected = true; return;
+  }
   if (o.state === 'attack' && o.move.kind === 'throw' && o.t <= o.move.grab[1]) { // simultaneous throws -> tech
     p.setState('tech'); o.setState('tech'); p.vx = -8 * p.facing; o.vx = -8 * o.facing;
     addText('THROW TECH', (p.x + o.x) / 2, GY - 210, '#9cf', 24); return;
   }
-  p.throwDmg = p.move.throwDmg || 1300; p.noTech = !!p.move.noTech; p.throwVx = p.move.throwVx ?? 6;
+  p.throwDmg = m.throwDmg || 1300; p.noTech = !!m.noTech; p.throwVx = m.throwVx ?? 6; p.throwAnimCur = m.throwAnim || null;
   if (p.noTech) addText(p.move.name.toUpperCase(), p.x, GY - 210, p.c.color, 22, 36);
   p.setState('throwing'); o.setState('thrown'); o.facing = -p.facing;
   Sfx.play('grab');
+}
+
+// ---------------------------------------------------------------- Puppet (Manhattan Cafe's Friend)
+// Cafe's skills command her Friend instead of attacking themselves. The Friend floats behind Cafe; a command
+// sends her out to do one move (c.moves[id].pup: seq / hits / vel, at: 'self' | 'opp' | 'above', dx, dy)
+// while Cafe is free again almost at once. Hitting the Friend while she attacks sends her away for 4 seconds.
+const PUP_AWAY = 240;
+function pupMoveOf(p) { return p.pupMove && p.c.moves[p.pupMove] ? p.c.moves[p.pupMove].pup : null; }
+function pupRect(p, b) { const l = p.pupF === 1 ? p.pupX + b[0] : p.pupX - b[0] - b[2]; return { x: l, y: p.pupY + b[1], w: b[2], h: b[3] }; }
+function pupHurtbox(p) { const pm = p.c.puppet && p.pupState === 'act' && pupMoveOf(p); return pm ? pupRect(p, pm.hurt || [-24, -125, 50, 125]) : null; }
+function pupStart(p) {
+  const m = p.move, pm = m.pup; if (!pm) return;
+  if (p.pupState === 'away') { addText('FRIEND IS AWAY', p.x, GY - 190, '#b9a6e6', 15, 26); return; }
+  const o = opp(p), f = p.facing;
+  let x = p.x + f * (pm.dx ?? 30), y = GY;
+  if (pm.at === 'opp') x = o.x - f * (pm.dx ?? 0);
+  if (pm.at === 'above') { x = o.x - f * (pm.dx ?? 10); y = GY - (pm.dy || 230); }
+  if (pm.at === 'air') { x = p.x + f * (pm.dx ?? 20); y = Math.min(GY, p.y + (pm.dy || 0)); }
+  Object.assign(p, { pupX: Math.max(30, Math.min(STAGE_W - 30, x)), pupY: y, pupF: f, pupState: 'act', pupT: 0, pupMove: m.id, pupHit: 0, pupSimple: p.simple });
+  if (!G.resim) G.fx.push({ type: 'vfx', kind: 'vanish', x: p.pupX, y: p.pupY - 70, ox: 0, oy: 0, facing: f, t: 0, life: 14, color: '#8a6bc9', alt: '#ffd646', seed: G.frameCount });
+}
+function pupDispel(p) {
+  if (!G.resim) { spark(p.pupX, p.pupY - 80, 'block', 2, 0); callout(p, 'FRIEND DISPELLED', 'bad'); }
+  Object.assign(p, { pupState: 'away', pupCd: PUP_AWAY, pupMove: null });
+  Sfx.play('block');
+}
+function updatePuppet(p) {
+  if (!p.c.puppet) return;
+  if (p.pupCd > 0 && --p.pupCd === 0 && p.pupState === 'away') { p.pupState = 'idle'; p.pupX = p.x - p.facing * 48; p.pupY = GY; }
+  if (p.pupState === 'away') return;
+  if (p.pupState === 'act') {
+    const pm = pupMoveOf(p); if (!pm) { p.pupState = 'return'; return; }
+    p.pupT++;
+    if (pm.vel) for (const v of pm.vel) if (p.pupT >= v[0] && p.pupT <= v[1]) { p.pupX += v[2] * p.pupF; if (v[3] !== undefined) p.pupY += v[3]; }
+    p.pupY = Math.min(GY, p.pupY); p.pupX = Math.max(30, Math.min(STAGE_W - 30, p.pupX));
+    if (p.pupT >= pm.total) p.pupState = 'return';
+    return;
+  }
+  // idle / returning: float back to her spot behind Cafe
+  const hx = p.x - p.facing * 48, hy = Math.min(GY, p.y), dx = hx - p.pupX, dy = hy - p.pupY, sp = p.pupState === 'return' ? 12 : 7, d = Math.hypot(dx, dy);
+  if (d <= sp) { p.pupX = hx; p.pupY = hy; p.pupState = 'idle'; } else { p.pupX += dx / d * sp; p.pupY += dy / d * sp; }
+  p.pupF = p.facing;
+}
+function pupHits(p) {
+  const pm = p.c.puppet && p.pupState === 'act' && pupMoveOf(p); if (!pm || !pm.hits) return;
+  const o = opp(p), hb = hurtbox(o); if (!hb) return;
+  for (let i = 0; i < pm.hits.length; i++) {
+    const h = pm.hits[i];
+    if ((p.pupHit & (1 << i)) || p.pupT < h.f[0] || p.pupT > h.f[1] || !overlap(pupRect(p, h.box), hb)) continue;
+    p.pupHit |= 1 << i;
+    // blocked by holding away from Cafe, like her own attacks: the Friend passing through you isn't a cross-up
+    resolveHit(p, o, h, p.x, p.pupY < GY - 20, { pup: true, simple: p.pupSimple, x: p.pupX, y: p.pupY - 90, vx: 0 });
+    break;
+  }
+}
+// a's strikes against the other side's Friend
+function strikePuppet(a) {
+  const d = opp(a), hb = pupHurtbox(d); if (!hb || a.state !== 'attack' || !a.move.hits) return;
+  a.move.hits.forEach((h, i) => {
+    if (a.hitDone[i] || a.t < h.f[0] || a.t > h.f[1] || !overlap(rect(a, h.box), hb)) return;
+    a.hitDone[i] = true; a.connected = true; pupDispel(d); G.freeze = Math.max(G.freeze, 7);
+  });
+}
+// a projectile flying into the target's Friend dispels her and is used up
+function pupHurtCheck(d, q) {
+  const hb = pupHurtbox(d); if (!hb || q.trap || !overlap(projRect(q), hb)) return false;
+  pupDispel(d); q.dead = true; return true;
 }
 
 // ---------------------------------------------------------------- Cinematic supers
@@ -606,7 +713,7 @@ function updateCine(p) {
       const fin = step[4] === 'fin';
       const scale = Math.max(0.5, comboScale(o));
       const miracle = !!p.c.lowHpBoost && p.hp <= p.c.hp * 0.3;
-      const dmg = Math.round(step[3] * scale * (p.guts ? 1.15 : 1) * (p.c.dmgMul || 1) * (miracle ? 1.15 : 1));   // same multipliers as normal hits
+      const dmg = Math.round(step[3] * scale * (p.guts ? 1.15 : 1) * (p.c.dmgMul || 1) * (miracle ? 1.15 : 1) * (p.boss ? 1.15 : 1));   // same multipliers as normal hits
       dealDamage(p, o, dmg, 0);
       o.combo++; o.flash = 4;
       noteDamage(o, dmg);
@@ -626,8 +733,8 @@ function updateCine(p) {
 // heavies / counter hits / punishes 100%) times a per-hit decay of 13% from the 3rd hit, down to 25%
 function comboScale(d) { return d.combo === 0 ? 1 : (d.prorate || 1) * (d.combo < 2 ? 1 : Math.max(0.25, 1 - 0.13 * (d.combo - 1))); }
 function dealDamage(a, d, dmg, chip) {
-  d.hp = Math.max(0, d.hp - dmg);
-  if (d.c.lowHpBoost && !d.miracle && d.hp > 0 && d.hp <= d.c.hp * 0.3) { d.miracle = true; d.flash = 14; addText('MIRACLE MODE', d.x, GY - 230, d.c.look.fxColor, 24, 60); }
+  d.hp = Math.max(G.mode === 'training' ? 1 : 0, d.hp - dmg);   // the training dummy never gets KO'd (the readout still shows full damage)
+  if (d.c.lowHpBoost && !d.miracle && d.hp > 0 && d.hp <= d.c.hp * 0.3) { d.miracle = true; d.flash = 14; callout(d, 'MIRACLE MODE', 'spurt'); }
   d.comboDmg += dmg;
   a.meter = Math.min(100, a.meter + dmg / 70);
   d.meter = Math.min(100, d.meter + dmg / 140);
@@ -651,18 +758,18 @@ function canBlock(d) {
 function resolveHit(a, d, h, srcX, fromAir, proj) {
   if (!hurtboxOK(d)) return null;
   if (invulnerable(d, fromAir)) return null;
-  if (proj && d.state === 'attack' && d.move.projInv && d.t >= d.move.projInv[0] && d.t <= d.move.projInv[1]) return null;   // passes through projectiles
+  if (proj && !proj.pup && d.state === 'attack' && d.move.projInv && d.t >= d.move.projInv[0] && d.t <= d.move.projInv[1]) return null;   // passes through projectiles
   // ------ counter stance: a strike that lands during the window is caught and answered
   const cw = d.state === 'attack' && d.move.counter;
-  if (cw && d.t >= cw.f[0] && d.t <= cw.f[1] && !h.cine && (!proj || cw.proj)) {
-    if (proj) { spark(proj.x, proj.y, 'block', 2, 0); addText('PARRY', d.x, GY - 200, d.c.look.fxColor, 20, 28); Sfx.play('block'); return 'block'; }
+  if (cw && d.t >= cw.f[0] && d.t <= cw.f[1] && !h.cine && (!proj || cw.proj || proj.pup)) {
+    if (proj) { if (proj.pup) pupDispel(a); spark(proj.x, proj.y, 'block', 2, 0); callout(d, 'PARRY', 'def'); Sfx.play('block'); return 'block'; }
     if (a.airborne) { a.setState('airHit'); a.kd = false; a.hardKd = false; a.vy = -5; a.vx = a.x < d.x ? -3 : 3; a.y = Math.min(a.y, GY - 1); }
     else { a.setState('hit'); a.hs = cw.stun || 30; a.crouchHit = false; a.vx = 0; }
     a.combo = 0; a.comboDmg = 0; a.jug = 0;
     d.facing = a.x >= d.x ? 1 : -1;
     startMove(d, cw.to, true);
     spark((a.x + d.x) / 2, GY - 100, 'counter', 3, d.facing); G.freeze = 16; G.shake = 6; d.flash = 10;
-    addText('COUNTER!', d.x, GY - 210, d.c.look.fxColor, 28, 40); Sfx.play('armor');
+    callout(d, 'COUNTER!', 'def'); Sfx.play('armor');
     return 'block';
   }
   const dirSign = srcX < d.x ? 1 : -1; // push direction for defender
@@ -688,7 +795,7 @@ function resolveHit(a, d, h, srcX, fromAir, proj) {
   if (d.state === 'attack' && d.armorLeft > 0 && d.move.armor && d.t >= d.move.armor[0] && d.t <= d.move.armor[1]) {
     d.armorLeft--; dealDamage(a, d, Math.round(h.dmg * 0.5), 0); d.flash = 8;
     spark(d.x - dirSign * 20, GY - 90, 'armor', 2, -dirSign); G.freeze = 10; Sfx.play('armor');
-    addText('ARMOR', d.x, GY - 200, '#ffd24a', 20, 30);
+    callout(d, 'ARMOR', 'def');
     a.connected = true; a.hitOK = false; return 'block';
   }
   // ------ combo limit: past the cap, hits pass through and the opponent drops out
@@ -706,14 +813,17 @@ function resolveHit(a, d, h, srcX, fromAir, proj) {
   if ((a.state === 'attack' && a.move.kind === 'super') || (proj && proj.sup)) scale = Math.max(scale, 0.5);   // supers always keep half their damage
   const simple = proj ? proj.simple : (a.state === 'attack' && a.simple);
   const miracle = !!a.c.lowHpBoost && a.hp <= a.c.hp * 0.3;
-  let dmg = Math.round(h.dmg * scale * (counter ? 1.1 : 1) * (a.guts ? 1.15 : 1) * (simple ? 0.9 : 1) * (a.gold > 0 ? 1.08 : 1) * (a.c.dmgMul || 1) * (punish ? 1.2 : 1) * (miracle ? 1.15 : 1));
+  let dmg = Math.round(h.dmg * scale * (counter ? 1.1 : 1) * (a.guts ? 1.15 : 1) * (simple ? 0.9 : 1) * (a.gold > 0 ? 1.08 : 1) * (a.c.dmgMul || 1) * (punish ? 1.2 : 1) * (miracle ? 1.15 : 1) * (a.boss ? 1.15 : 1));
   dealDamage(a, d, dmg, 0);
   d.combo++; d.flash = 3;
   noteDamage(d, dmg);
   const decay = d.comboT > DECAY_AT ? Math.max(0.45, 1 - (d.comboT - DECAY_AT) / 320) : 1;   // hitstun decay in long combos
   const hs = Math.round((h.hs * (counter ? 1.4 : 1) + (a.state === 'attack' && a.move.kind === 'normal' ? 1 : 0) + (punish ? 8 : 0)) * decay);
-  if (punish) addText('PUNISH!', d.x, GY - 200, a.c.look.fxColor, 24, 38);
-  else if (counter) addText('COUNTER', d.x, GY - 200, '#ff5a5a', 22, 35);
+  // callouts: anyone hitting a recovering opponent gets PUNISH! (McQueen's passive adds the bonus)
+  const late = d.combo === 1 && ((d.state === 'attack' && d.move.kind !== 'taunt' && d.t > d.move.lastActive) || (d.state === 'land' && d.landRec >= 7));
+  if (d.combo === 1) callout(a, 'FIRST ATTACK', 'first');
+  if (late) callout(a, punish ? 'PUNISH! +20%' : 'PUNISH!', 'atk');
+  else if (counter) callout(a, 'COUNTER HIT', 'atk');
 
   if (h.cine && !proj) { // super cinematic
     a.setState('cine'); a.cs = 0; d.setState('cineHit'); d.x = Math.max(40, Math.min(STAGE_W - 40, a.x + a.facing * 70));
@@ -758,10 +868,41 @@ function checkHits(a) {
 
 // ---------------------------------------------------------------- Projectiles
 function projRect(q) { const b = q.box; return { x: q.x + b[0], y: q.y + b[1], w: b[2], h: b[3] }; }
+// Traps (Agnes Tachyon): a projectile with `trap` flies (with gravity), settles on the ground, arms after
+// trap.arm frames, then goes off when the opponent touches it, after trap.fuse frames, or on 'detonate'.
+// Going off turns it into a short-lived burst hitbox.
+function trapBoom(q) {
+  const b = q.trap.burst;
+  q.phase = 'boom'; q.box = b.box; q.hit = b.hit; q.hitsLeft = 1; q.cool = 0; q.life = b.dur || 10; q.t = 0; q.vx = 0; q.vy = 0;
+  spark(q.x, q.y - 20, 'hit', 2, 0); G.shake = Math.max(G.shake, 4); Sfx.play('heavy');
+}
+// a strike that touches the other side's potion breaks it harmlessly: the answer to traps on the floor
+function popTraps(a) {
+  if (a.state !== 'attack' || !a.move.hits) return;
+  for (const h of a.move.hits) {
+    if (a.t < h.f[0] || a.t > h.f[1]) continue;
+    const r = rect(a, h.box);
+    for (const q of G.projs) if (q.trap && q.owner !== a.side && q.phase !== 'boom' && !q.dead && overlap(projRect(q), r)) {
+      q.dead = true; spark(q.x, q.y - 10, 'block', 1, 0); addText('POP', q.x, q.y - 50, '#cfe3ff', 15, 22); Sfx.play('block');
+    }
+  }
+}
 function updateProjs() {
   for (const q of G.projs) {
+    if (q.grav) q.vy += q.grav;
     q.x += q.vx; q.y += q.vy || 0; q.t++; if (q.cool > 0) q.cool--;
-    if (q.vy > 0 && q.y >= GY - 12) { q.dead = true; dust(q.x, GY, 1); continue; }   // air shots end on the ground
+    if (q.trap) {
+      const T = q.trap;
+      if (q.phase === 'fly' && q.vy > 0 && q.y >= GY - (T.h || 14)) {   // landed: becomes a trap on the floor
+        q.phase = 'set'; q.vx = 0; q.vy = 0; q.grav = 0; q.y = GY - (T.h || 14); q.t = 0; q.life = T.life; q.cool = T.arm; q.box = T.box || q.box;
+        dust(q.x, GY, 1); dust(q.x, GY, -1);
+      } else if (q.phase === 'set' && T.fuse && q.t >= T.fuse) trapBoom(q);
+      if (q.phase === 'fly' && (q.x < -100 || q.x > STAGE_W + 100)) q.dead = true;
+      if (q.phase !== 'fly' && --q.life <= 0) q.dead = true;
+      continue;
+    }
+    if (q.roll && q.y < GY - q.roll) { q.vy += 0.6; if (q.y + q.vy >= GY - q.roll) { q.y = GY - q.roll; q.vy = 0; dust(q.x, GY, 1); } }   // falls, then rolls along the ground
+    else if (q.vy > 0 && q.y >= GY - 12) { q.dead = true; dust(q.x, GY, 1); continue; }   // air shots end on the ground
     if (--q.life <= 0 || q.x < -100 || q.x > STAGE_W + 100) q.dead = true;
   }
   // reflectors
@@ -769,7 +910,7 @@ function updateProjs() {
     const m = p.state === 'attack' && p.move.reflect;
     if (!m || p.t < m.f[0] || p.t > m.f[1]) continue;
     const r = rect(p, m.box);
-    for (const q of G.projs) if (q.owner !== p.side && !q.dead && !q.sup && overlap(projRect(q), r)) {
+    for (const q of G.projs) if (q.owner !== p.side && !q.dead && !q.sup && !q.trap && overlap(projRect(q), r)) {
       q.owner = p.side; q.vx = -q.vx * 1.15; q.vy = -(q.vy || 0); q.facing = -q.facing; q.life = Math.max(q.life, 60);
       spark(q.x, q.y, 'block', 2, 0); addText('REFLECT', q.x, q.y - 40, p.c.look.fxColor, 18, 26); Sfx.play('block');
     }
@@ -777,7 +918,7 @@ function updateProjs() {
   // clash
   for (let i = 0; i < G.projs.length; i++) for (let j = i + 1; j < G.projs.length; j++) {
     const A = G.projs[i], B = G.projs[j];
-    if (A.owner !== B.owner && !A.dead && !B.dead && overlap(projRect(A), projRect(B))) {
+    if (A.owner !== B.owner && !A.dead && !B.dead && A.phase !== 'boom' && B.phase !== 'boom' && overlap(projRect(A), projRect(B))) {   // a projectile also pops a trap
       if (A.sup !== B.sup) (A.sup ? B : A).dead = true; else A.dead = B.dead = true;   // super shots win clashes
       spark((A.x + B.x) / 2, (A.y + B.y) / 2, 'block', 2, 0); Sfx.play('block');
     }
@@ -785,9 +926,17 @@ function updateProjs() {
   for (const q of G.projs) {
     if (q.dead || q.cool > 0) continue;
     const d = opp(G.p[q.owner]), hb = hurtbox(d);
+    // a set trap (or a potion still in the air) bursts when they touch it; the burst is what hits
+    // set traps go off when stepped on (their feet), so a poke can still reach over and pop one
+    if (q.trap && q.phase !== 'boom') {
+      const feet = q.phase === 'set' ? { x: d.x - 14, y: d.y - 24, w: 28, h: 24 } : hb;
+      if (hb && overlap(projRect(q), feet)) trapBoom(q); else continue;
+    }
+    if (pupHurtCheck(d, q)) continue;
     if (hb && overlap(projRect(q), hb)) {
-      const r = resolveHit(G.p[q.owner], d, q.hit, q.x - q.vx * 4, false, q);
-      if (r) { if (--q.hitsLeft > 0) { q.cool = 7; q.vx *= 0.6; } else q.dead = true; }
+      // a trap is blocked by holding away from Tachyon, wherever the potion is (no accidental cross-ups)
+      const r = resolveHit(G.p[q.owner], d, q.hit, q.trap ? G.p[q.owner].x : q.x - q.vx * 4, false, q);
+      if (r) { if (--q.hitsLeft > 0) { q.cool = 7; q.vx *= 0.6; } else if (q.trap) q.cool = 999; else q.dead = true; }
     }
   }
   G.projs = G.projs.filter(q => !q.dead);
@@ -804,6 +953,7 @@ function step(inputs) {
   phaseLogic();
   const [a, b] = G.p;
   updateFighter(a); updateFighter(b);
+  updatePuppet(a); updatePuppet(b);
 
   // pushboxes
   const pushOn = p => !(p.state === 'attack' && p.move.noPush && p.t >= p.move.noPush[0] && p.t <= p.move.noPush[1]) &&
@@ -829,6 +979,9 @@ function step(inputs) {
   if (hb) { b.hitDone[hb[0]] = true; }
   if (ha) resolveHit(a, b, ha[1], a.x, a.airborne, false);
   if (hb) resolveHit(b, a, hb[1], b.x, b.airborne, false);
+  strikePuppet(a); strikePuppet(b);
+  popTraps(a); popTraps(b);
+  pupHits(a); pupHits(b);
   updateProjs();
 
   // camera

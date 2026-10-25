@@ -36,7 +36,7 @@ CASES = [
  ('trial_run', "UI.pendingMode='training'; UI.sel=[0,0]; UI.vsStage=0; UI.musicIdx=0; beginLocalMatch(); trialStart('spe', 5); demoStart(); for (let f=0; f<75; f++) { const ins = gameInputs([{...NEUTRAL},{...NEUTRAL}]); step(ins); demoAfterStep(); trialTrack(); toolsAfterStep(); }"),
  ('training_tools', "UI.pendingMode='training'; UI.sel=[2,5]; UI.vsStage=1; UI.musicIdx=2; beginLocalMatch(); TR.on=false; const [a,d]=G.p; a.x=900; d.x=990; for (let f=0; f<40; f++) { const inp = f===6?{...NEUTRAL,M:1}:f===2||f===3?{...NEUTRAL,d:1}:{...NEUTRAL}; step([inp,{...NEUTRAL}]); toolsAfterStep(); } for (let f=0; f<30; f++) { step([f===2?{...NEUTRAL,d:1,H:1}:{...NEUTRAL},{...NEUTRAL}]); toolsAfterStep(); }"),
  ('music', "UI.pendingMode='versus'; UI.sel=[6,2]; UI.vsStage=1; UI.musicIdx=6; UI.screen='music';"),
- ('sound', "UI.screen='sound'; UI.soundIdx=4; MD.jukebox='gs';"),
+ ('sound', "UI.screen='sound'; UI.soundIdx=4;"),
  ('netselect2', "hideNetPanel(); Net.side=0; Net.role='host'; Net.myPick=2; Net.theirPick=4; Net.theirReady=true; Net.theirBuild=BUILD; Net.stage=1; Net.music='kb'; Net.focus=2; UI.screen='netselect';"),
  ('netselect', "hideNetPanel(); Net.side=0; Net.role='host'; Net.myPick=2; Net.theirPick=4; Net.theirReady=true; Net.theirBuild=BUILD; Net.stage=3; UI.screen='netselect';"),
 ]

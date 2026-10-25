@@ -186,8 +186,8 @@ const CHARS = {
   suz: {
     name: 'SILENCE SUZUKA', short: 'SUZ', arch: 'HIT AND RUN', color: '#3fbf6a', color2: '#ffb38a',
     blurb: 'Hit and run. Lands one big hit and gets out before you can answer, but has low health.',
-    hp: 8500, walk: 3.5, back: 3.2, dash: 10, jumpV: -15.2, jumpX: 4.8, grav: 0.78,
-    airDash: true, backdash: { vx: 9, vy: -5.5, inv: 6, total: 22 }, dmgMul: 1.1,
+    hp: 9000, walk: 3.5, back: 3.2, dash: 10, jumpV: -15.2, jumpX: 4.8, grav: 0.78,
+    airDash: true, backdash: { vx: 9, vy: -5.5, total: 22 }, dmgMul: 1.1,
     throwAnim: '850', win: '210', winFrames: 4, intro: '940',
     look: {
       idleSpeed: 7, walkSpeed: 5, runSpeed: 3, idle2: '601', squash: 0.7,
@@ -235,11 +235,11 @@ const CHARS = {
         hits: [H({ f: [5, 8], box: [20, -120, 88, 64], dmg: 780, hs: 20, bs: 12, lvl: 2, push: 3 })],
         v: { L: { vel: arc(12, -1, 0.6) } },
         ex: { note: 'Invincible start, knocks down, longer hop', inv: [1, 9], vel: arc(12, -1, 1.3), hit: { kd: true, launch: [4, -8] } } },
-      '4S': { kind: 'special', name: 'Lead the Pack', input: '← + S', motion: '623', cd: 240, note: 'Invincible anti-air (weaker)', vnote: 'L less invincible',
-        anim: '860', seq: [[0, 3], [1, 7], [2, 8], [3, 20]], inv: [1, 7],
+      '4S': { kind: 'special', name: 'Lead the Pack', input: '← + S', motion: '623', cd: 240, note: 'Invincible anti-air', vnote: 'L less invincible',
+        anim: '860', seq: [[0, 3], [1, 7], [2, 8], [3, 20]], inv: [1, 10],
         hits: [H({ f: [4, 10], box: [0, -210, 72, 200], dmg: 900, hs: 30, bs: 18, lvl: 3, kd: true, launch: [3, -14], chip: 0.1 })],
-        v: { L: { inv: [1, 3], dmgMul: 0.8, seq: [[0, 3], [1, 7], [2, 8], [3, 14]] } },
-        ex: { note: 'Longer invincibility, more damage', inv: [1, 12], dmgMul: 1.35 } },
+        v: { L: { inv: [1, 5], dmgMul: 0.8, seq: [[0, 3], [1, 7], [2, 8], [3, 14]] } },
+        ex: { note: 'Longer invincibility, more damage', inv: [1, 14], dmgMul: 1.35 } },
       '6S': { kind: 'special', name: 'Turbine Roll', input: '→ + S', motion: '41236', cd: 180, note: '3-hit low roll', vnote: 'L short · M far',
         anim: '830', seq: [[0, 4], [1, 3], [2, 3], [0, 3], [1, 3], [2, 3], [0, 3], [1, 3], [2, 3], [0, 3], [1, 7]],
         vel: [[5, 30, 8]], hurt: [-30, -70, 60, 70],
@@ -262,7 +262,7 @@ const CHARS = {
   // ---- Gold Ship (rushdown)
   gs: {
     name: 'GOLD SHIP', short: 'GS', arch: 'RUSHDOWN', color: '#e0442f', color2: '#ffe08a',
-    blurb: 'Rushdown. Fastest normals, a command dash with mixups, and the legendary dropkick.',
+    blurb: 'Rushdown. Fastest normals, a command dash with mixups, and Golshi Dropkick!!.',
     hp: 9500, walk: 3.4, back: 2.6, dash: 9.8, jumpV: -14, jumpX: 4.6, grav: 0.8,
     lightChain: true, dashCancel: true,
     throwAnim: '840', win: '600', winFrames: 8, intro: '940',
@@ -285,16 +285,16 @@ const CHARS = {
       { name: 'Launcher air combo', seq: '2M 2H jc j.M j.H', note: 'Jump-cancel the launcher' },
     ],
     moves: baseNormals({
-      '5L': { kind: 'normal', str: 1, anim: '820', seq: [[0, 3], [1, 9]],
+      '5L': { kind: 'normal', str: 1, anim: '820', seq: [[0, 3], [1, 10]],
         hits: [H({ f: [4, 6], box: [25, -102, 70, 30], dmg: 270, hs: 13, bs: 10, lvl: 0, push: 4 })] },
-      '2L': { kind: 'normal', str: 1, crouch: true, anim: '821', seq: [[0, 3], [1, 9]],
+      '2L': { kind: 'normal', str: 1, crouch: true, anim: '821', seq: [[0, 3], [1, 10]],
         hits: [H({ f: [4, 6], box: [25, -62, 74, 26], dmg: 240, hs: 13, bs: 9, lvl: 0, guard: 'low', push: 2 })] },
-      '5M': { kind: 'normal', str: 2, anim: '870', seq: [[0, 5], [1, 13]], vel: [[2, 6, 4]],
+      '5M': { kind: 'normal', str: 2, anim: '870', seq: [[0, 5], [1, 14]], vel: [[2, 6, 4]],
         hits: [H({ f: [6, 9], box: [30, -100, 92, 32], dmg: 620, hs: 17, bs: 11, lvl: 1 })] },
-      '5H': { kind: 'normal', str: 3, anim: '930', seq: [[0, 4], [1, 4], [2, 3], [3, 4], [4, 5], [5, 14]], vel: [[5, 11, 3.5]], jc: true,
+      '5H': { kind: 'normal', str: 3, anim: '930', seq: [[0, 4], [1, 4], [2, 3], [3, 4], [4, 5], [5, 15]], vel: [[5, 11, 3.5]], jc: true,
         hits: [H({ f: [9, 11], box: [30, -105, 82, 34], dmg: 650, hs: 18, bs: 12, lvl: 2, push: 2 }),
                H({ f: [16, 20], box: [0, -185, 88, 140], dmg: 500, hs: 22, bs: 12, lvl: 2, launch: [2, -12.5] })] },
-      'dL': { kind: 'normal', str: 1, name: 'Dash Jab', seq: [[0, 2, '900'], [1, 2, '900'], [0, 3, '820'], [1, 10, '820']], vel: [[1, 7, 9.5]],
+      'dL': { kind: 'normal', str: 1, name: 'Dash Jab', seq: [[0, 2, '900'], [1, 2, '900'], [0, 3, '820'], [1, 11, '820']], vel: [[1, 7, 9.5]],
         hits: [H({ f: [5, 7], box: [20, -104, 80, 32], dmg: 380, hs: 15, bs: 11, lvl: 1, push: 5 })] },
       '5S': { kind: 'special', name: 'Golshi Rush', input: 'S', motion: '236', cd: 120, note: 'Command dash', vnote: 'L short · M long',
         fnote: 'during the dash: L low slide · M overhead · H grab · S stop',
@@ -369,8 +369,8 @@ const CHARS = {
         v: { L: { vel: [[10, 17, 8]] } },
         ex: { note: 'Invincible start, wall bounce', inv: [1, 11], dmgMul: 1.3, hit: { wb: true, launch: [7, -8] } } },
       '6S': { kind: 'throw', name: 'Pit Stop', input: '→ + S', motion: '41236', cd: 150, note: 'Command grab (untechable), leaves them right in front', special: true,
-        anim: '820', seq: [[0, 4], [1, 20]], grab: [4, 6], range: 95, throwDmg: 1250, noTech: true, throwVx: 2,
-        ex: { note: 'Longer range, more damage', range: 125, throwDmg: 1650 } },
+        anim: '820', seq: [[0, 6], [1, 20]], grab: [6, 8], range: 95, throwDmg: 1100, noTech: true, throwVx: 2,
+        ex: { note: 'Longer range, more damage', range: 125, throwDmg: 1450 } },
       '2S': { kind: 'special', name: 'Drift Hop', input: '↓ + S', motion: '214', cd: 120, note: 'Hop kick overhead', vnote: 'L lands in front · M crosses over',
         air: true, seq: [[0, 4, '160'], [1, 6, '850'], [2, 6, '850'], [3, 16, '850']], vel: [[1, 1, 7, -9]], landRec: 7,
         hits: [H({ f: [12, 30], box: [-28, -95, 104, 72], dmg: 650, hs: 18, bs: 11, lvl: 2, guard: 'high', chip: 0.1 })],
@@ -397,7 +397,7 @@ const CHARS = {
     name: 'DAIWA SCARLET', short: 'DAI', arch: 'ZONER', color: '#e2304a', color2: '#ffd7df',
     blurb: 'Zoner. Shoots straight, up, low and from the air, and has a reflector. Weak up close.',
     hp: 9000, walk: 3.0, back: 2.9, dash: 7.8, jumpV: -15.2, jumpX: 4.2, grav: 0.76,
-    projMax: 2, backdash: { vx: 8.5, vy: -5, inv: 5, total: 22 }, dmgMul: 0.88,
+    projMax: 2, backdash: { vx: 8.5, vy: -5, total: 22 }, dmgMul: 0.95,
     throwAnim: '850', win: '210', winFrames: 4, intro: '940', ai: 'zoner',
     look: {
       idleSpeed: 9, walkSpeed: 6, runSpeed: 4, idle2: '601', squash: 0.9,
@@ -418,9 +418,9 @@ const CHARS = {
       { name: 'Anti-air shot', seq: '2H jc j.M j.H', note: 'Launch, then air combo' },
     ],
     moves: baseNormals({
-      '5L': { kind: 'normal', str: 1, anim: '820', seq: [[0, 4], [1, 11]],
+      '5L': { kind: 'normal', str: 1, anim: '820', seq: [[0, 4], [1, 10]],
         hits: [H({ f: [5, 7], box: [25, -102, 84, 30], dmg: 270, hs: 13, bs: 9, lvl: 0, push: 6 })] },
-      '5M': { kind: 'normal', str: 2, anim: '870', seq: [[0, 7], [1, 15]], vel: [[3, 7, 2]],
+      '5M': { kind: 'normal', str: 2, anim: '870', seq: [[0, 7], [1, 14]], vel: [[3, 7, 2]],
         hits: [H({ f: [8, 11], box: [30, -100, 122, 32], dmg: 570, hs: 17, bs: 11, lvl: 1, push: 8 })] },
       '5H': { kind: 'normal', str: 3, anim: '930', seq: [[0, 5], [1, 4], [2, 4], [3, 5], [4, 5], [5, 16]], vel: [[6, 12, 2]], jc: true,
         hits: [H({ f: [10, 13], box: [30, -105, 100, 34], dmg: 600, hs: 18, bs: 12, lvl: 2, push: 2 }),
@@ -428,17 +428,17 @@ const CHARS = {
       '2H': { kind: 'normal', str: 3, anim: '880', seq: [[0, 4, '840'], [1, 4, '840'], [0, 6], [1, 18]], aaInv: [6, 16], jc: true,
         hits: [H({ f: [9, 14], box: [0, -220, 90, 205], dmg: 850, hs: 20, bs: 14, lvl: 2, launch: [2, -13] })] },
       '5S': { kind: 'special', name: 'Scarlet Shot', input: 'S', motion: '236', cd: 75, note: 'Projectile (two on screen)', vnote: 'L slow · M fast',
-        seq: [[0, 4, '802'], [1, 4, '802'], [2, 4, '802'], [3, 20, '802']], ev: { 12: 'proj' },
+        seq: [[0, 4, '802'], [1, 4, '802'], [2, 4, '802'], [3, 18, '802']], ev: { 12: 'proj' },
         proj: { style: 'rose', vx: 7.5, life: 160, box: [-24, -24, 48, 48], hit: H({ dmg: 520, hs: 18, bs: 12, lvl: 1, chip: 0.1 }) },
         v: { L: { proj: { vx: 4.5 } } },
         ex: { note: 'Two fast shots', ev: { 12: 'proj', 19: 'proj2' }, proj: { vx: 9.5 }, proj2: { style: 'rose', vx: 9.5, life: 160, box: [-24, -24, 48, 48], hit: H({ dmg: 520, hs: 18, bs: 12, lvl: 1, chip: 0.1 }) }, dmgMul: 1.15 } },
       '2S': { kind: 'special', name: 'High Top Line', input: '↓ + S', motion: '214', cd: 90, note: 'Anti-air shot angled upward', vnote: 'L flatter · M steeper',
-        anim: '860', seq: [[0, 6], [1, 6], [2, 20]], ev: { 8: 'proj' },
+        anim: '860', seq: [[0, 6], [1, 6], [2, 18]], ev: { 8: 'proj' },
         proj: { style: 'rose', vx: 4.5, vy: -6.5, y0: -140, x0: 40, life: 60, box: [-24, -24, 48, 48], hit: H({ dmg: 600, hs: 20, bs: 12, lvl: 2, kd: true, launch: [2, -9], chip: 0.1 }) },
         v: { L: { proj: { vx: 6.5, vy: -3.5 } } },
         ex: { note: 'Fires both angles', ev: { 8: 'proj', 12: 'proj2' }, proj2: { style: 'rose', vx: 6.5, vy: -3.5, y0: -130, x0: 40, life: 60, box: [-24, -24, 48, 48], hit: H({ dmg: 600, hs: 20, bs: 12, lvl: 2, kd: true, launch: [2, -9], chip: 0.1 }) }, dmgMul: 1.1 } },
       '6S': { kind: 'special', name: 'Ground Rose', input: '→ + S', motion: '41236', cd: 120, note: 'Low projectile along the ground', vnote: 'L short range · M full screen',
-        seq: [[0, 5, '821'], [1, 6, '821'], [1, 18, '821']], ev: { 9: 'proj' },
+        seq: [[0, 5, '821'], [1, 6, '821'], [1, 16, '821']], ev: { 9: 'proj' },
         proj: { style: 'wave', vx: 6, life: 130, y0: -22, x0: 50, box: [-26, -22, 52, 44], hit: H({ dmg: 460, hs: 18, bs: 12, lvl: 1, guard: 'low', chip: 0.1 }) },
         v: { L: { proj: { life: 55 } } },
         ex: { note: 'Faster, hits twice', proj: { vx: 8.5, hits: 2 }, dmgMul: 1.3 } },
@@ -519,7 +519,7 @@ const CHARS = {
         ex: { note: 'Invincible until it hits, big damage', inv: [1, 14], dmgMul: 1.4, hit: { launch: [3, -18] } } },
       '6S': { kind: 'special', name: 'Long-Distance Stride', input: '→ + S', motion: '41236', cd: 180, note: 'Very long low slide (unsafe on block)', vnote: 'L shorter',
         anim: '300', seq: [[0, 3], [1, 3], [2, 3], [3, 3], [4, 3], [5, 3], [6, 4], [7, 12]], vel: [[3, 22, 12]], hurt: [-35, -60, 95, 60],
-        hits: [H({ f: [6, 22], box: [10, -55, 96, 45], dmg: 950, hs: 24, bs: 14, lvl: 2, guard: 'low', kd: true, launch: [4, -6], chip: 0.1 })],
+        hits: [H({ f: [8, 22], box: [10, -55, 96, 45], dmg: 950, hs: 24, bs: 14, lvl: 2, guard: 'low', kd: true, launch: [4, -6], chip: 0.1 })],
         v: { L: { vel: [[3, 15, 9]] } },
         ex: { note: 'Passes through projectiles, hard knockdown', projInv: [1, 22], dmgMul: 1.3, hit: { hard: true } } },
       'SU': superMove('Mejiro Pride', ['341', 0],
@@ -563,20 +563,20 @@ const CHARS = {
                   hits: [H({ f: [7, 11], box: [25, -105, 90, 40], dmg: 680, hs: 22, bs: 12, lvl: 2, push: 5 })] } },
         ex: { note: 'Passes through projectiles, wall bounce', projInv: [1, 14], dmgMul: 1.3, hit: { kd: true, launch: [7, -8], wb: true } } },
       '2S': { kind: 'special', name: 'Imperial Rush', input: '↓ + S', motion: '214', cd: 150, note: 'Flurry of punches ending in a launcher', vnote: 'L 3 hits · M 4 hits',
-        anim: '997', seq: [[0, 3], [1, 3], [2, 3], [3, 4], [4, 4], [5, 13]], vel: [[1, 12, 3.5]],
-        hits: [H({ f: [3, 4], box: [20, -112, 88, 45], dmg: 230, hs: 18, bs: 12, lvl: 1, push: 1 }),
-               H({ f: [6, 7], box: [20, -112, 88, 45], dmg: 230, hs: 18, bs: 12, lvl: 1, push: 1 }),
-               H({ f: [9, 10], box: [20, -112, 88, 45], dmg: 260, hs: 18, bs: 12, lvl: 1, push: 1 }),
-               H({ f: [13, 17], box: [5, -190, 92, 170], dmg: 560, hs: 24, bs: 14, lvl: 2, kd: true, launch: [1, -13], push: 1, chip: 0.1 })],
-        v: { L: { seq: [[0, 3], [1, 3], [3, 4], [4, 4], [5, 11]],
-                  hits: [H({ f: [3, 4], box: [20, -112, 88, 45], dmg: 230, hs: 18, bs: 12, lvl: 1, push: 1 }),
-                         H({ f: [6, 7], box: [20, -112, 88, 45], dmg: 230, hs: 18, bs: 12, lvl: 1, push: 1 }),
-                         H({ f: [10, 14], box: [5, -190, 92, 170], dmg: 500, hs: 24, bs: 14, lvl: 2, kd: true, launch: [1, -13], push: 1, chip: 0.1 })] } },
+        anim: '997', seq: [[0, 4], [1, 3], [2, 3], [3, 4], [4, 4], [5, 13]], vel: [[1, 13, 3.5]],
+        hits: [H({ f: [4, 5], box: [20, -112, 88, 45], dmg: 230, hs: 18, bs: 12, lvl: 1, push: 1 }),
+               H({ f: [7, 8], box: [20, -112, 88, 45], dmg: 230, hs: 18, bs: 12, lvl: 1, push: 1 }),
+               H({ f: [10, 11], box: [20, -112, 88, 45], dmg: 260, hs: 18, bs: 12, lvl: 1, push: 1 }),
+               H({ f: [14, 18], box: [5, -190, 92, 170], dmg: 560, hs: 24, bs: 14, lvl: 2, kd: true, launch: [1, -13], push: 1, chip: 0.1 })],
+        v: { L: { seq: [[0, 4], [1, 3], [3, 4], [4, 4], [5, 11]],
+                  hits: [H({ f: [4, 5], box: [20, -112, 88, 45], dmg: 230, hs: 18, bs: 12, lvl: 1, push: 1 }),
+                         H({ f: [7, 8], box: [20, -112, 88, 45], dmg: 230, hs: 18, bs: 12, lvl: 1, push: 1 }),
+                         H({ f: [11, 15], box: [5, -190, 92, 170], dmg: 500, hs: 24, bs: 14, lvl: 2, kd: true, launch: [1, -13], push: 1, chip: 0.1 })] } },
         ex: { note: '7 hits, more damage', anim: undefined, dmgMul: 1.3,
-              seq: [[0, 3, '996'], [1, 3, '996'], [2, 3, '996'], [3, 3, '996'], [0, 3, '997'], [1, 3, '997'], [2, 3, '997'], [3, 4, '997'], [4, 4, '997'], [5, 13, '997']],
-              vel: [[1, 24, 3]],
-              hits: [3, 6, 9, 12, 15, 18, 21].map(f => H({ f: [f, f + 1], box: [20, -112, 88, 45], dmg: 200, hs: 18, bs: 12, lvl: 1, push: 1 }))
-                .concat([H({ f: [25, 29], box: [5, -190, 92, 170], dmg: 560, hs: 24, bs: 14, lvl: 2, kd: true, launch: [1, -14], push: 1, chip: 0.1 })]) } },
+              seq: [[0, 4, '996'], [1, 3, '996'], [2, 3, '996'], [3, 3, '996'], [0, 3, '997'], [1, 3, '997'], [2, 3, '997'], [3, 4, '997'], [4, 4, '997'], [5, 13, '997']],
+              vel: [[1, 25, 3]],
+              hits: [4, 7, 10, 13, 16, 19, 22].map(f => H({ f: [f, f + 1], box: [20, -112, 88, 45], dmg: 200, hs: 18, bs: 12, lvl: 1, push: 1 }))
+                .concat([H({ f: [26, 30], box: [5, -190, 92, 170], dmg: 560, hs: 24, bs: 14, lvl: 2, kd: true, launch: [1, -14], push: 1, chip: 0.1 })]) } },
       '4S': { kind: 'special', name: 'Emperor\'s Rise', input: '← + S', motion: '623', cd: 200, note: 'Uppercut, beats jump-ins, NOT invincible', vnote: 'L recovers faster',
         seq: [[0, 3, '995'], [0, 4, '993'], [1, 8, '993'], [1, 20, '993']], aaInv: [3, 14],
         hits: [H({ f: [7, 13], box: [0, -215, 80, 205], dmg: 1000, hs: 26, bs: 16, lvl: 3, kd: true, launch: [2, -14], chip: 0.1 })],
@@ -648,8 +648,267 @@ const CHARS = {
          ['802', 0, 2, 300], ['930', 3, 5], ['930', 4, 10, 1500, 'fin'], ['930', 5, 26]]),
     }),
   },
+
+  // ---- Jungle Pocket (grappler)
+  // Command grabs can't be blocked and can't be comboed into: get close, make them guess, grab.
+  jp: {
+    name: 'JUNGLE POCKET', short: 'JP', arch: 'GRAPPLER', color: '#d99a1e', color2: '#fff1bf',
+    blurb: 'Grappler. Three command grabs, an armored charge and 11,000 health. Slow to get in.',
+    hp: 11000, walk: 2.8, back: 2.5, dash: 8.4, jumpV: -14.4, jumpX: 4.0, grav: 0.8,
+    throwAnim: '920', win: '600', winFrames: 8, intro: '940', ai: 'grapple',
+    look: {
+      idleSpeed: 8, walkSpeed: 7, runSpeed: 4, idle2: '601', squash: 1.3,
+      taunt: '511', tauntLine: 'I\'M THE STRONGEST!', intros: ['940', '510'], wins: ['600', '541'],
+      fxColor: '#ffc93a', fxAlt: '#5fcf6e', motif: 'paw',
+      fx: {
+        '5S': [{ t: 2, type: 'dustTrail', dur: 22 }],
+        '6S': [{ t: 4, type: 'ring', x: 50, y: -80, r: 55 }],
+        '4S': [{ t: 3, type: 'pillar', x: 30, w: 50, h: 260, color: '#ffc93a' }],
+        '2S': [{ t: 3, type: 'streak', dur: 16 }, { t: 3, type: 'dustTrail', dur: 16 }],
+        'SU': [{ t: 1, type: 'ring', y: -80, r: 150 }],
+      },
+    },
+    combos: [
+      { name: 'Starter', seq: '5L 5M 5H 214M', note: 'Chain into Lion Charge for a knockdown, then get close for a grab' },
+      { name: 'Low into charge', seq: '2L 2M 214M', note: 'Both lows, then the charge' },
+      { name: 'Launcher air combo', seq: '2M 2H jc j.M j.H', note: 'Jump-cancel the launcher' },
+      { name: 'Heavy punish', seq: '5M 5H 214H', note: 'EX Lion Charge (50 Spurt) wall-bounces' },
+    ],
+    moves: baseNormals({
+      '5L': { kind: 'normal', str: 1, anim: '820', seq: [[0, 5], [1, 11]],
+        hits: [H({ f: [6, 8], box: [25, -104, 78, 32], dmg: 340, hs: 14, bs: 9, lvl: 0, push: 5 })] },
+      '5M': { kind: 'normal', str: 2, anim: '870', seq: [[0, 8], [1, 15]], vel: [[3, 9, 3]],
+        hits: [H({ f: [9, 12], box: [30, -104, 100, 36], dmg: 720, hs: 18, bs: 10, lvl: 1 })] },
+      '5H': { kind: 'normal', str: 3, anim: '930', seq: [[0, 5], [1, 5], [2, 4], [3, 5], [4, 5], [5, 17]], vel: [[6, 13, 3]], jc: true,
+        hits: [H({ f: [11, 14], box: [30, -110, 88, 40], dmg: 800, hs: 19, bs: 12, lvl: 2, push: 2 }),
+               H({ f: [20, 23], box: [0, -190, 90, 150], dmg: 550, hs: 22, bs: 12, lvl: 2, launch: [2, -12.5] })] },
+      'throw': { kind: 'throw', anim: '820', seq: [[0, 3], [1, 22]], grab: [3, 5], range: 96, throwDmg: 1500 },
+      '6S': { kind: 'throw', special: true, name: 'Pocket Buster', input: '→ + S', motion: '41236', cd: 120, note: 'Command grab: huge damage, can\'t be blocked or teched', vnote: 'L shorter reach, recovers faster',
+        anim: '820', seq: [[0, 5], [1, 24]], grab: [5, 6], range: 100, throwDmg: 1500, noTech: true, throwVx: 3, throwAnim: '830',
+        v: { L: { seq: [[0, 5], [1, 17]], range: 84, throwDmg: 1200 } },
+        ex: { note: 'Invincible start, longer reach, more damage', inv: [1, 5], range: 124, throwDmg: 1750 } },
+      '5S': { kind: 'throw', special: true, name: 'Jungle Rush', input: 'S', motion: '236', cd: 150, note: 'Running grab that covers half the screen', vnote: 'L short · M long',
+        seq: [[0, 3, '102'], [1, 3, '102'], [2, 3, '102'], [3, 3, '102'], [4, 3, '102'], [5, 3, '102'], [0, 3, '102'], [1, 3, '102'], [0, 16, '800']],
+        vel: [[2, 24, 9]], grab: [8, 24], range: 82, throwDmg: 1200, noTech: true, throwAnim: '920',
+        v: { L: { throwDmg: 1050, vel: [[2, 15, 8]], grab: [7, 15], seq: [[0, 3, '102'], [1, 3, '102'], [2, 3, '102'], [3, 3, '102'], [4, 3, '102'], [0, 14, '800']] } },
+        ex: { note: 'Runs through projectiles, faster, more damage', projInv: [1, 24], vel: [[2, 24, 11.5]], throwDmg: 1450 } },
+      '4S': { kind: 'throw', special: true, name: 'Wild Catch', input: '← + S', motion: '623', cd: 180, note: 'Anti-air grab: catches jumpers, misses anyone on the ground', vnote: 'L faster recovery',
+        seq: [[0, 3, '840'], [1, 4, '840'], [2, 6, '840'], [0, 18, '880']], aaInv: [1, 13], grab: [4, 13], grabAir: true, grabH: 230, range: 112,
+        throwDmg: 1350, noTech: true, throwAnim: '930', throwVx: 4,
+        v: { L: { seq: [[0, 3, '840'], [1, 4, '840'], [2, 6, '840'], [0, 11, '880']], throwDmg: 1150 } },
+        ex: { note: 'Fully invincible start, more damage', inv: [1, 13], throwDmg: 1600 } },
+      '2S': { kind: 'special', name: 'Lion Charge', input: '↓ + S', motion: '214', cd: 150, note: 'Armored shoulder charge, absorbs a hit', vnote: 'L shorter',
+        seq: [[0, 4, '801'], [1, 4, '801'], [2, 4, '801'], [3, 4, '801'], [4, 4, '801'], [5, 14, '801']], vel: [[4, 18, 9]], armor: [1, 12],
+        hits: [H({ f: [10, 18], box: [10, -115, 92, 80], dmg: 950, hs: 24, bs: 14, lvl: 2, kd: true, launch: [5, -6], chip: 0.1, push: 6 })],
+        v: { L: { vel: [[4, 13, 8]] } },
+        ex: { note: '2-hit armor, wall bounce', armorHits: 2, armor: [1, 16], dmgMul: 1.3074, hit: { wb: true, launch: [7, -7] } } },
+      // grab super: the catch starts the cinematic, and it can catch someone in hitstun (a combo ender)
+      'SU': { kind: 'super', name: 'Wild Typhoon', input: 'S + H (full Spurt)', inv: [1, 16], grabStun: true,
+        seq: [[0, 10, '341'], [0, 4, '820'], [1, 24, '820']], grab: [11, 15], range: 124,
+        cine: [['830', 0, 4], ['830', 1, 4, 350], ['830', 2, 4, 350], ['830', 0, 4, 350], ['830', 1, 4, 400], ['930', 3, 6], ['930', 4, 8, 600],
+               ['880', 0, 12, 1564, 'fin'], ['880', 1, 26]] },
+    }),
+  },
+
+  // ---- Agnes Tachyon (set-play)
+  // Potions land and stay on the floor as traps. They arm after a moment, then burst when you touch them,
+  // when their fuse runs out, or when she sets them off with Catalyst.
+  at: {
+    name: 'AGNES TACHYON', short: 'TAC', arch: 'SET-PLAY', color: '#8fbf3a', color2: '#f3ffd6',
+    blurb: 'Set-play. Leaves potions on the floor that burst later, then makes you deal with them. Weak defence.',
+    hp: 9000, walk: 2.9, back: 2.9, dash: 8.0, jumpV: -15, jumpX: 4.2, grav: 0.76, projMax: 3,
+    throwAnim: '840', win: '600', winFrames: 8, intro: '940', ai: 'setplay',
+    look: {
+      idleSpeed: 9, walkSpeed: 6, runSpeed: 4, idle2: '601', squash: 1,
+      taunt: '510', tauntLine: 'Fufufu... another test subject!', intros: ['940', '202'], wins: ['600', '203'],
+      fxColor: '#b6ff5a', fxAlt: '#f7e36a', motif: 'bubbles',
+      fx: {
+        '6S': [{ t: 5, type: 'ring', y: -90, r: 80, color: '#b6ff5a' }, { t: 5, type: 'motif', y: -120, n: 10, spread: 60 }],
+        '4S': [{ t: 3, type: 'pillar', x: 20, w: 46, h: 230, color: '#b6ff5a' }],
+        'SU': [{ t: 1, type: 'ring', y: -80, r: 150 }],
+      },
+    },
+    combos: [
+      { name: 'Starter', seq: '5L 5M 5H 623M', note: 'Chain into Overdose Spark' },
+      { name: 'Potion ender', seq: '2L 2M 236L', note: 'The near toss bursts right on them' },
+      { name: 'Launcher air combo', seq: '2M 2H jc j.M j.H', note: 'Jump-cancel the launcher' },
+      { name: 'Meter dump', seq: '5M 5H 623H', note: 'EX Overdose Spark (50 Spurt)' },
+    ],
+    moves: baseNormals({
+      '5S': { kind: 'special', name: 'Test Tube Toss', input: 'S', motion: '236', cd: 100, note: 'Lobs a potion that stays on the floor as a trap', vnote: 'L near · M far',
+        seq: [[0, 4, '930'], [1, 4, '930'], [2, 4, '930'], [3, 16, '930']], ev: { 11: 'proj' },
+        proj: { style: 'potion', vx: 5.5, vy: -7.5, grav: 0.4, y0: -120, x0: 30, life: 999, box: [-14, -18, 28, 32],
+          trap: { arm: 24, life: 360, h: 12, box: [-34, -16, 68, 22], burst: { dur: 14, box: [-52, -150, 104, 158], hit: H({ dmg: 600, hs: 24, bs: 14, lvl: 2, kd: true, launch: [1, -11], chip: 0.1 }) } } },
+        v: { L: { proj: { vx: 4.2, vy: -4 } } },
+        ex: { note: 'Two potions, one near and one far', ev: { 11: 'proj', 15: 'proj2' }, proj: { vx: 4.2, vy: -4 },
+          proj2: { style: 'potion', vx: 6.5, vy: -8, grav: 0.4, y0: -120, x0: 30, life: 999, box: [-14, -18, 28, 32],
+            trap: { arm: 24, life: 360, h: 12, box: [-34, -16, 68, 22], burst: { dur: 14, box: [-52, -150, 104, 158], hit: H({ dmg: 600, hs: 24, bs: 14, lvl: 2, kd: true, launch: [1, -11], chip: 0.1 }) } } } } },
+      '2S': { kind: 'special', name: 'Delayed Reaction', input: '↓ + S', motion: '214', cd: 140, note: 'Sets a flask that goes off on its own a second and a half later', vnote: 'L at her feet · M further out',
+        seq: [[0, 6, '821'], [1, 16, '821']], ev: { 6: 'proj' },
+        proj: { style: 'potion', vx: 0, vy: 0, grav: 0.6, y0: -24, x0: 90, life: 999, box: [-14, -18, 28, 32],
+          trap: { arm: 8, life: 200, fuse: 90, h: 12, box: [-30, -16, 60, 22], burst: { dur: 16, box: [-70, -175, 140, 182], hit: H({ dmg: 900, hs: 26, bs: 16, lvl: 3, kd: true, launch: [3, -13], chip: 0.1 }) } } },
+        v: { L: { proj: { x0: 40 } } },
+        ex: { note: 'Shorter fuse, bigger burst', proj: { x0: 70, trap: { arm: 6, life: 200, fuse: 45, h: 12, box: [-30, -16, 60, 22], burst: { dur: 16, box: [-85, -195, 170, 202], hit: H({ dmg: 1200, hs: 28, bs: 18, lvl: 3, kd: true, hard: true, launch: [3, -14], chip: 0.1 }) } } } } },
+      '6S': { kind: 'special', name: 'Catalyst', input: '→ + S', motion: '41236', cd: 60, note: 'Sets off every potion she has out, right now',
+        seq: [[0, 4, '202'], [1, 4, '202'], [2, 12, '202']], ev: { 5: 'detonate' },
+        ex: { note: 'Invincible while she does it', inv: [1, 12] } },
+      '4S': { kind: 'special', name: 'Overdose Spark', input: '← + S', motion: '623', cd: 220, note: 'Beats jump-ins, NOT invincible', vnote: 'L recovers faster',
+        seq: [[0, 3, '840'], [1, 3, '840'], [2, 6, '840'], [1, 22, '880']], aaInv: [3, 13],
+        hits: [H({ f: [5, 12], box: [0, -200, 78, 196], dmg: 950, hs: 26, bs: 16, lvl: 3, kd: true, launch: [3, -13], chip: 0.1 })],
+        v: { L: { dmgMul: 0.8, seq: [[0, 3, '840'], [1, 3, '840'], [2, 6, '840'], [1, 15, '880']] } },
+        ex: { note: 'Invincible start', inv: [1, 10], dmgMul: 1.3 } },
+      'jS': { kind: 'special', name: 'Flask Drop', input: 'S in the air', motion: '236', cd: 100, note: 'Drops a potion straight down onto the floor, once per jump',
+        air: true, seq: [[0, 4, '850'], [1, 14, '850']], ev: { 5: 'proj' }, landRec: 6,
+        proj: { style: 'potion', vx: 1, vy: 1, grav: 0.4, y0: -60, x0: 20, life: 999, box: [-14, -18, 28, 32],
+          trap: { arm: 24, life: 360, h: 12, box: [-34, -16, 68, 22], burst: { dur: 14, box: [-52, -150, 104, 158], hit: H({ dmg: 600, hs: 24, bs: 14, lvl: 2, kd: true, launch: [1, -11], chip: 0.1 }) } } },
+        ex: { note: 'Bursts on landing', proj: { trap: { arm: 0, life: 30, fuse: 1, h: 12, box: [-34, -16, 68, 22], burst: { dur: 14, box: [-60, -160, 120, 168], hit: H({ dmg: 800, hs: 24, bs: 14, lvl: 2, kd: true, launch: [1, -11], chip: 0.1 }) } } } } },
+      'SU': superMove('Ultimate Experiment', ['950', 1],
+        [['930', 0, 4, 250], ['930', 1, 4, 250], ['930', 2, 4, 300], ['802', 0, 3], ['802', 1, 3, 300], ['802', 2, 3, 300], ['802', 3, 4],
+         ['950', 2, 6, 400], ['950', 3, 12, 1500, 'fin'], ['950', 4, 26]]),
+    }),
+  },
+
+  // ---- Manhattan Cafe (puppet)
+  // Her skills don't attack: they send her Friend (Sunday Silence) to attack while Cafe stays free to act.
+  mc: {
+    name: 'MANHATTAN CAFE', short: 'CAF', arch: 'PUPPET', color: '#6b4fa8', color2: '#f3e6a0',
+    blurb: 'Puppet. Her skills send her Friend to attack, so she can pressure from two places at once.',
+    hp: 9500, walk: 3.0, back: 2.8, dash: 8.6, jumpV: -15, jumpX: 4.3, grav: 0.76, puppet: true,
+    throwAnim: '840', win: '600', winFrames: 8, intro: '940', ai: 'puppet',
+    look: {
+      idleSpeed: 10, walkSpeed: 6, runSpeed: 4, idle2: '601', squash: 0.8,
+      taunt: '550', tauntLine: 'My friend says hello.', intros: ['940', '540'], wins: ['600', '520'],
+      fxColor: '#c9a2ff', fxAlt: '#ffd646', motif: 'moons',
+      fx: { 'SU': [{ t: 1, type: 'ring', y: -80, r: 150 }] },
+    },
+    combos: [
+      { name: 'Friend rush', seq: '5L 5M 236M', note: 'Cancel 5M into Phantom Rush. The Friend hits while Cafe recovers' },
+      { name: 'Low sweep', seq: '2L 2M 214M', note: 'The Friend sweeps low in front of Cafe' },
+      { name: 'Launcher air combo', seq: '2M 2H jc j.M j.H', note: 'Jump-cancel the launcher' },
+      { name: 'Rising shade', seq: '5M 5H 623M', note: 'The Friend launches them from beside Cafe' },
+    ],
+    moves: baseNormals({
+      '5S': { kind: 'special', name: 'Friend: Phantom Rush', input: 'S', motion: '236', cd: 120, note: 'The Friend dashes forward and strikes', vnote: 'L short · M long',
+        seq: [[0, 4, '202'], [1, 10, '202']], ev: { 3: 'pup' },
+        pup: { at: 'self', dx: 10, seq: [[0, 3, '701'], [1, 3, '701'], [2, 3, '701'], [3, 3, '701'], [4, 3, '701'], [5, 3, '701'], [6, 3, '701'], [0, 8, '920']],
+          vel: [[1, 21, 11]], hits: [H({ f: [5, 22], box: [-10, -120, 92, 120], dmg: 700, hs: 22, bs: 13, lvl: 2, push: 5, chip: 0.1 })] },
+        v: { L: { pup: { at: 'self', dx: 10, seq: [[0, 3, '701'], [1, 3, '701'], [2, 3, '701'], [3, 3, '701'], [0, 8, '920']],
+          vel: [[1, 12, 9]], hits: [H({ f: [4, 13], box: [-10, -120, 92, 120], dmg: 650, hs: 22, bs: 13, lvl: 2, push: 5, chip: 0.1 })] } } },
+        ex: { note: 'Cafe is invincible, the Friend hits twice and wall-bounces', inv: [1, 12],
+          pup: { at: 'self', dx: 10, seq: [[0, 3, '701'], [1, 3, '701'], [2, 3, '701'], [3, 3, '701'], [4, 3, '701'], [5, 3, '701'], [6, 3, '701'], [0, 4, '920'], [3, 10, '930']],
+            vel: [[1, 21, 12.5]], hits: [H({ f: [5, 20], box: [-10, -120, 92, 120], dmg: 600, hs: 22, bs: 13, lvl: 2, push: 2, chip: 0.1 }),
+                                         H({ f: [25, 29], box: [0, -170, 96, 170], dmg: 700, hs: 26, bs: 14, lvl: 3, kd: true, wb: true, launch: [7, -8], chip: 0.1 })] } } },
+      '2S': { kind: 'special', name: 'Friend: Shadow Sweep', input: '↓ + S', motion: '214', cd: 120, note: 'The Friend appears in front of Cafe and sweeps low', vnote: 'L close · M far',
+        seq: [[0, 4, '821'], [1, 10, '821']], ev: { 3: 'pup' },
+        pup: { at: 'self', dx: 95, seq: [[0, 3, '300'], [1, 3, '300'], [2, 3, '300'], [3, 3, '300'], [4, 3, '300'], [5, 3, '300'], [6, 4, '300'], [7, 6, '300']],
+          vel: [[1, 14, 4]], hits: [H({ f: [6, 14], box: [-50, -55, 112, 50], dmg: 650, hs: 20, bs: 12, lvl: 2, guard: 'low', kd: true, launch: [3, -6], chip: 0.1 })] },
+        v: { L: { pup: { at: 'self', dx: 50, seq: [[0, 3, '300'], [1, 3, '300'], [2, 3, '300'], [3, 3, '300'], [4, 3, '300'], [5, 3, '300'], [6, 4, '300'], [7, 6, '300']],
+          vel: [[1, 14, 4]], hits: [H({ f: [6, 14], box: [-50, -55, 112, 50], dmg: 620, hs: 20, bs: 12, lvl: 2, guard: 'low', kd: true, launch: [3, -6], chip: 0.1 })] } } },
+        ex: { note: 'Two sweeps, hard knockdown', inv: [1, 8],
+          pup: { at: 'self', dx: 90, seq: [[0, 3, '300'], [1, 3, '300'], [2, 3, '300'], [3, 3, '300'], [4, 3, '300'], [5, 3, '300'], [6, 3, '300'], [7, 3, '300'], [0, 3, '300'], [1, 3, '300'], [2, 3, '300'], [3, 3, '300'], [4, 3, '300'], [7, 6, '300']],
+            vel: [[1, 36, 4.5]], hits: [H({ f: [6, 12], box: [-50, -55, 112, 50], dmg: 450, hs: 22, bs: 12, lvl: 1, guard: 'low', chip: 0.1, push: 1 }),
+                                        H({ f: [26, 34], box: [-50, -55, 112, 50], dmg: 600, hs: 22, bs: 12, lvl: 2, guard: 'low', kd: true, hard: true, launch: [3, -6], chip: 0.1 })] } } },
+      '6S': { kind: 'special', name: 'Friend: Night Drop', input: '→ + S', motion: '41236', cd: 200, note: 'The Friend drops on them from above: an overhead', vnote: 'L in front of them · M right on top',
+        seq: [[0, 4, '840'], [1, 16, '840']], ev: { 5: 'pup' },
+        pup: { at: 'above', dx: 0, dy: 240, seq: [[0, 10, '161'], [3, 20, '163'], [2, 10, '139']],
+          vel: [[1, 10, 0, -1], [11, 30, 0, 13]], hits: [H({ f: [12, 30], box: [-30, -80, 60, 80], dmg: 700, hs: 20, bs: 12, lvl: 2, guard: 'high', chip: 0.1 })] },
+        v: { L: { pup: { at: 'above', dx: 70, dy: 240, seq: [[0, 10, '161'], [3, 20, '163'], [2, 10, '139']],
+          vel: [[1, 10, 0, -1], [11, 30, 0, 13]], hits: [H({ f: [12, 30], box: [-30, -80, 60, 80], dmg: 650, hs: 20, bs: 12, lvl: 2, guard: 'high', chip: 0.1 })] } } },
+        ex: { note: 'Faster, knocks down', inv: [1, 10],
+          pup: { at: 'above', dx: 0, dy: 220, seq: [[0, 6, '161'], [3, 20, '163'], [2, 10, '139']],
+            vel: [[1, 6, 0, -1], [7, 26, 0, 15]], hits: [H({ f: [8, 26], box: [-34, -84, 68, 84], dmg: 850, hs: 22, bs: 14, lvl: 3, guard: 'high', kd: true, launch: [3, -8], chip: 0.1 })] } } },
+      '4S': { kind: 'special', name: 'Friend: Rising Shade', input: '← + S', motion: '623', cd: 200, note: 'The Friend uppercuts beside Cafe. Cafe herself is NOT invincible', vnote: 'L recovers faster',
+        seq: [[0, 4, '880'], [1, 12, '880']], ev: { 2: 'pup' },
+        pup: { at: 'self', dx: 45, seq: [[0, 3, '840'], [1, 3, '840'], [0, 8, '880'], [1, 16, '880']], vel: [[4, 10, 2, -2]],
+          hits: [H({ f: [5, 12], box: [-10, -220, 84, 220], dmg: 900, hs: 26, bs: 16, lvl: 3, kd: true, launch: [3, -13], chip: 0.1 })] },
+        v: { L: { seq: [[0, 4, '880'], [1, 7, '880']] } },
+        ex: { note: 'Cafe is invincible too', inv: [1, 14] } },
+      'jS': { kind: 'special', name: 'Friend: Night Dive', input: 'S in the air', motion: '236', cd: 120, note: 'The Friend dives down from beside Cafe, overhead', vnote: 'L flatter · M steeper',
+        air: true, seq: [[0, 4, '850'], [1, 12, '850']], ev: { 3: 'pup' }, landRec: 6,
+        pup: { at: 'air', dx: 20, seq: [[3, 40, '163']], vel: [[1, 40, 7, 9]], hurt: [-24, -110, 50, 100],
+          hits: [H({ f: [3, 40], box: [0, -62, 70, 62], dmg: 600, hs: 17, bs: 11, lvl: 1, guard: 'high' })] },
+        v: { L: { pup: { at: 'air', dx: 20, seq: [[3, 40, '163']], vel: [[1, 40, 9.5, 6]], hurt: [-24, -110, 50, 100],
+          hits: [H({ f: [3, 40], box: [0, -62, 70, 62], dmg: 600, hs: 17, bs: 11, lvl: 1, guard: 'high' })] } } },
+        ex: { note: 'Knocks down', pup: { at: 'air', dx: 20, seq: [[3, 40, '163']], vel: [[1, 40, 8, 11]], hurt: [-24, -110, 50, 100],
+          hits: [H({ f: [3, 40], box: [0, -64, 74, 64], dmg: 800, hs: 20, bs: 12, lvl: 2, guard: 'high', kd: true, launch: [4, -6] })] } } },
+      'SU': superMove('Beyond the Shadow', ['341', 0],
+        [['920', 0, 4, 250], ['920', 1, 4, 250], ['920', 2, 4, 300], ['850', 0, 4], ['850', 1, 6, 400], ['850', 2, 6, 400],
+         ['930', 3, 5], ['930', 4, 6, 450], ['880', 0, 12, 1400, 'fin'], ['880', 1, 26]]),
+    }),
+  },
+
+  // ---- Dantsu Flame (footsies)
+  df: {
+    name: 'DANTSU FLAME', short: 'DAN', arch: 'FOOTSIES', color: '#e0566f', color2: '#ffe8ba',
+    blurb: 'Footsies. Fast feet and a long poke that turns into a combo. Weak on defence.',
+    hp: 10000, walk: 4.0, back: 3.7, dash: 10, jumpV: -15, jumpX: 4.5, grav: 0.78, backdash: { vx: 9.5, vy: -5, total: 19 },
+    throwAnim: '840', win: '600', winFrames: 8, intro: '940', ai: 'footsies',
+    look: {
+      idleSpeed: 7, walkSpeed: 4, runSpeed: 3, idle2: '601', squash: 1.1,
+      taunt: '510', tauntLine: 'Cheese, anyone?', intros: ['940', '540'], wins: ['600', '520'],
+      fxColor: '#ff8a3c', fxAlt: '#ffd84a', motif: 'cheese',
+      fx: {
+        '5S': [{ t: 9, type: 'streak', dur: 8 }],
+        '5S~F': [{ t: 3, type: 'pillar', x: 30, w: 46, h: 220, color: '#ff8a3c' }],
+        '4S': [{ t: 4, type: 'pillar', x: 20, w: 46, h: 235, color: '#ff8a3c' }, { t: 5, type: 'motif', x: 20, y: -130, n: 8, spread: 70 }],
+        '6S': [{ t: 1, type: 'dustTrail', dur: 12 }],
+        'SU': [{ t: 1, type: 'ring', y: -80, r: 150 }],
+      },
+    },
+    combos: [
+      { name: 'Poke confirm', seq: '5M 236M fS', note: 'Flame Thrust from range. On hit, press S for Flame Twist' },
+      { name: 'Starter', seq: '5L 5M 5H 236M fS', note: 'Chain into the poke and its follow-up' },
+      { name: 'Low into cheese', seq: '2L 2M 214M', note: 'The cheese wheel rolls in low' },
+      { name: 'Launcher air combo', seq: '2M 2H jc j.M j.H', note: 'Jump-cancel the launcher' },
+    ],
+    moves: baseNormals({
+      '5L': { kind: 'normal', str: 1, anim: '820', seq: [[0, 4], [1, 9]],
+        hits: [H({ f: [5, 7], box: [25, -102, 80, 30], dmg: 290, hs: 13, bs: 9, lvl: 0, push: 6 })] },
+      '5M': { kind: 'normal', str: 2, anim: '870', seq: [[0, 7], [1, 12]], vel: [[3, 8, 3]],
+        hits: [H({ f: [8, 11], box: [30, -100, 116, 32], dmg: 620, hs: 17, bs: 11, lvl: 1, push: 8 })] },
+      '2M': { kind: 'normal', str: 2, crouch: true, anim: '300', seq: [[0, 3], [1, 3], [2, 3], [3, 3], [4, 3], [5, 3], [6, 3], [7, 4]],
+        vel: [[4, 13, 8]], hurt: [-35, -60, 95, 60],
+        hits: [H({ f: [7, 14], box: [10, -55, 104, 45], dmg: 580, hs: 18, bs: 12, lvl: 1, guard: 'low', push: 5 })] },
+      // the poke: safe at the tip, and on hit it turns into a combo with the follow-up
+      '5S': { kind: 'special', name: 'Flame Thrust', input: 'S', motion: '236', cd: 80, note: 'Long poke, safe at the tip. On hit press S again for Flame Twist', vnote: 'L faster · M longer',
+        fnote: 'on hit: S (or L/M/H) for Flame Twist, a launcher',
+        anim: '870', seq: [[0, 9], [1, 5], [1, 12]], vel: [[3, 9, 4]],
+        hits: [H({ f: [10, 14], box: [40, -104, 150, 34], dmg: 650, hs: 26, bs: 12, lvl: 2, push: 10 })],
+        follow: { win: [11, 30], onHit: true, S: '5S~F', L: '5S~F', M: '5S~F', H: '5S~F' },
+        v: { L: { seq: [[0, 7], [1, 5], [1, 10]], hits: [H({ f: [8, 11], box: [40, -104, 124, 34], dmg: 560, hs: 25, bs: 11, lvl: 2, push: 9 })], follow: { win: [9, 26], onHit: true, S: '5S~F', L: '5S~F', M: '5S~F', H: '5S~F' } } },
+        ex: { note: 'Passes through projectiles, wall bounce on its own', projInv: [1, 14], dmgMul: 1.3, hit: { kd: true, wb: true, launch: [7, -8] } } },
+      '5S~F': { kind: 'special', followOf: '5S', name: 'Flame Twist', seq: [[0, 3, '930'], [1, 3, '930'], [2, 3, '930'], [3, 4, '930'], [4, 5, '930'], [5, 12, '930']], vel: [[1, 10, 8]],
+        hits: [H({ f: [8, 13], box: [0, -190, 96, 170], dmg: 700, hs: 26, bs: 14, lvl: 3, kd: true, launch: [2, -12], chip: 0.1 })] },
+      '2S': { kind: 'special', name: 'Cheese Wheel', input: '↓ + S', motion: '214', cd: 100, note: 'A slow cheese wheel rolls along the floor (low). Short range', vnote: 'L slower',
+        seq: [[0, 5, '821'], [1, 6, '821'], [1, 14, '821']], ev: { 8: 'proj' },
+        proj: { style: 'cheese', vx: 4.5, life: 70, y0: -22, x0: 45, box: [-22, -22, 44, 44], hit: H({ dmg: 500, hs: 19, bs: 12, lvl: 1, guard: 'low', chip: 0.1 }) },
+        v: { L: { proj: { vx: 3.3, life: 80 } } },
+        ex: { note: 'Tosses a cheese wedge in an arc first, then the wheel', ev: { 6: 'proj2', 14: 'proj' },
+          seq: [[0, 5, '930'], [1, 4, '930'], [0, 4, '821'], [1, 6, '821'], [1, 14, '821']],
+          proj2: { style: 'wedge', vx: 5, vy: -9, grav: 0.42, roll: 0, y0: -110, x0: 30, life: 60, box: [-20, -18, 40, 36], hit: H({ dmg: 450, hs: 20, bs: 12, lvl: 1, kd: true, launch: [2, -7], chip: 0.1 }) } } },
+      '6S': { kind: 'special', name: 'Footwork', input: '→ + S', motion: '41236', cd: 40, note: 'A quick step in (M) or out (L) to bait and punish', vnote: 'L steps back · M steps in',
+        seq: [[0, 3, '900'], [1, 3, '900'], [2, 3, '900'], [0, 4, '800']], vel: [[1, 9, 11]],
+        v: { L: { seq: [[0, 3, '163'], [1, 3, '163'], [1, 3, '163'], [0, 4, '800']], vel: [[1, 9, -10]] } },
+        ex: { note: 'Steps right through them to the other side', noPush: [1, 12], inv: [1, 6], vel: [[1, 12, 13]], seq: [[0, 3, '900'], [1, 3, '900'], [2, 3, '900'], [3, 3, '900'], [0, 5, '800']] } },
+      '4S': { kind: 'special', name: 'Fromage Rising', input: '← + S', motion: '623', cd: 220, note: 'Beats jump-ins, NOT invincible', vnote: 'L recovers faster',
+        seq: [[0, 3, '840'], [1, 3, '840'], [2, 6, '840'], [1, 22, '880']], aaInv: [3, 12],
+        hits: [H({ f: [5, 12], box: [0, -205, 80, 200], dmg: 980, hs: 26, bs: 16, lvl: 3, kd: true, launch: [3, -13], chip: 0.1 })],
+        v: { L: { dmgMul: 0.8, seq: [[0, 3, '840'], [1, 3, '840'], [2, 6, '840'], [1, 15, '880']] } },
+        ex: { note: 'Invincible start', inv: [1, 9], dmgMul: 1.3 } },
+      'SU': superMove('Grand Fromage Finale', ['950', 1],
+        [['870', 0, 4, 300], ['870', 1, 5, 350], ['920', 0, 4, 250], ['920', 1, 4, 250], ['930', 2, 4, 300], ['930', 3, 6, 350],
+         ['840', 0, 4], ['840', 1, 4], ['880', 0, 12, 1450, 'fin'], ['880', 1, 26]]),
+    }),
+  },
 };
 
+// scale a projectile's damage (a trap's damage is in its burst)
+function scaleProj(pj, mul, extra) {
+  const o = { ...pj };
+  if (pj.hit) o.hit = { ...pj.hit, dmg: Math.round(pj.hit.dmg * mul), ...(extra || {}) };
+  if (pj.trap) o.trap = { ...pj.trap, burst: { ...pj.trap.burst, hit: { ...pj.trap.burst.hit, dmg: Math.round(pj.trap.burst.hit.dmg * mul), ...(extra || {}) } } };
+  return o;
+}
 // EX move = base move + its `ex` overrides; id is base id + 'X'. Costs 50 Spurt, no cooldown.
 function buildEx(m, id) {
   const e = m.ex, mul = e.dmgMul || 1.3;
@@ -659,8 +918,9 @@ function buildEx(m, id) {
   const baseHits = e.hits || m.hits;
   if (baseHits) x.hits = baseHits.map(h => ({ ...h, dmg: Math.round(h.dmg * mul), ...(e.hit || {}) }));
   delete x.v;
-  if (m.proj) x.proj = { ...m.proj, ...(e.proj || {}), hit: { ...m.proj.hit, dmg: Math.round(m.proj.hit.dmg * mul), ...(e.hit || {}) } };
-  if (e.proj2) x.proj2 = { ...e.proj2, hit: { ...e.proj2.hit, dmg: Math.round(e.proj2.hit.dmg * mul), ...(e.hit || {}) } };
+  if (m.proj) x.proj = scaleProj({ ...m.proj, ...(e.proj || {}) }, mul, e.hit);
+  if (e.proj2) x.proj2 = scaleProj(e.proj2, mul, e.hit);
+  if (e.pup === undefined && m.pup && m.pup.hits) x.pup = { ...m.pup, hits: m.pup.hits.map(h => ({ ...h, dmg: Math.round(h.dmg * mul), ...(e.hit || {}) })) };
   return x;
 }
 // Strength variants: motion + L/M/H picks id + '.L' / '.H' (M is the base move).
@@ -670,7 +930,8 @@ function buildVariant(m, id, b) {
   delete x.v; delete x.ex; delete x.dmgMul; delete x.hit;
   if (e.hits === undefined && m.hits) x.hits = m.hits.map(h => ({ ...h, dmg: Math.round(h.dmg * mul), ...(e.hit || {}) }));
   else if (e.hits) x.hits = e.hits.map(h => ({ ...h, dmg: Math.round(h.dmg * mul) }));
-  if (m.proj) x.proj = { ...m.proj, ...(e.proj || {}), hit: { ...m.proj.hit, dmg: Math.round(m.proj.hit.dmg * mul), ...(e.hit || {}) } };
+  if (m.proj) x.proj = scaleProj({ ...m.proj, ...(e.proj || {}) }, mul, e.hit);
+  if (e.pup === undefined && m.pup && m.pup.hits && mul !== 1) x.pup = { ...m.pup, hits: m.pup.hits.map(h => ({ ...h, dmg: Math.round(h.dmg * mul) })) };
   return x;
 }
 for (const c of Object.values(CHARS)) {
@@ -729,5 +990,6 @@ for (const c of Object.values(CHARS)) {
       m.reflect ? m.reflect.f[1] : 0, ...Object.keys(m.ev || {}).map(Number));
     if (m.air || (m.kind === 'super' && m.cine)) m.lastActive = 999;
     if (!m.str) m.str = m.kind === 'special' ? 4 : m.kind === 'super' ? 5 : 0;
+    if (m.pup) m.pup.total = m.pup.seq.reduce((a, s) => a + s[1], 0);
   }
 }

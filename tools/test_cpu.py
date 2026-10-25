@@ -33,11 +33,11 @@ JS = r"""(pairs) => {
 import json, itertools, random
 async def main():
     random.seed(4)
-    R = ['spe', 'suz', 'gs', 'vo', 'ds', 'mm', 'tt', 'kb']
+    R = ['spe', 'suz', 'gs', 'vo', 'ds', 'mm', 'tt', 'kb', 'jp', 'at', 'mc', 'df']
     pairs = []
     for lvl in [(4, 1), (1, 4), (3, 2), (2, 3), (4, 4), (2, 2), (3, 3), (4, 3), (3, 4)]:
-        for k in range(8):
-            a, b = R[k], R[(k + 3) % 8]
+        for k in range(len(R)):
+            a, b = R[k], R[(k + 5) % len(R)]
             pairs.append([a, lvl[0], b, lvl[1], 100 + k + lvl[0] * 10 + lvl[1]])
     async with async_playwright() as p:
         b = await p.chromium.launch(); pg = await b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))

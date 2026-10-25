@@ -7,52 +7,71 @@
 <!--__ICONS__-->
 <style>
   /*__FONTS__*/
-  html,body{margin:0;height:100%;background:#070a18;overflow:hidden;font-family:'Barlow Condensed',system-ui,sans-serif}
+  html,body{margin:0;height:100%;background:#150a28;overflow:hidden;font-family:'Barlow Condensed',system-ui,sans-serif}
   body{display:flex;align-items:center;justify-content:center}
   canvas{image-rendering:pixelated;image-rendering:crisp-edges;display:block;background:#000}
   #net{position:fixed;left:50%;top:50%;transform:translate(-50%,-40%);width:min(460px,calc(100vw - 32px));
-       background:rgba(12,17,38,.97);border-top:4px solid #f6c343;border-radius:6px;padding:20px 24px;color:#e6e9f8;
+       background:rgba(30,14,54,.97);border-top:4px solid #f6c343;border-radius:14px;padding:20px 24px;color:#efe8fb;
        box-shadow:0 14px 44px rgba(0,0,0,.55);font-size:16px}
   #net.hidden,.hidden{display:none!important}
-  #net h2{margin:0 0 2px;font:italic 900 34px 'Barlow Condensed',sans-serif;color:#fff;letter-spacing:.01em}
+  #net h2{margin:0 0 2px;font:400 28px 'Dela Gothic One','Barlow Condensed',sans-serif;color:#fff;letter-spacing:.01em}
   #net h2::after{content:'';display:block;width:120px;height:4px;margin-top:4px;background:linear-gradient(90deg,#ff4f8b,#f6c343,#2fae5b,#4aa8ff)}
-  #net p.sub{margin:8px 0 14px;color:#aeb5d8;font-size:15px}
+  #net p.sub{margin:8px 0 14px;color:#c3b6e0;font-size:15px}
   #net .row{display:flex;gap:8px;margin:10px 0;align-items:center}
   #net button{font:italic 800 18px 'Barlow Condensed',sans-serif;padding:9px 18px;border:0;background:#ff4f8b;color:#fff;cursor:pointer;
        clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}
-  #net button.ghost{background:#283466;color:#dfe2f5}
+  #net button.ghost{background:#3a2360;color:#e8e0f6}
   #net button:hover{filter:brightness(1.12)}
   #net input[type=text]{flex:1;font:800 24px ui-monospace,monospace;letter-spacing:5px;text-transform:uppercase;padding:8px 12px;
-       border-radius:4px;border:2px solid #283466;background:#070a18;color:#fff;min-width:0}
-  #net select{font:600 16px 'Barlow Condensed',sans-serif;padding:5px;border-radius:4px;background:#070a18;color:#fff;border:1px solid #283466}
-  #net label{font-size:15px;color:#c9cfe8}
+       border-radius:4px;border:2px solid #3a2360;background:#150a28;color:#fff;min-width:0}
+  #net select{font:600 16px 'Barlow Condensed',sans-serif;padding:5px;border-radius:4px;background:#150a28;color:#fff;border:1px solid #3a2360}
+  #net label{font-size:15px;color:#d4c8ea}
   #netCodeBox{background:#140c06;border:2px solid #b98512;border-radius:6px;padding:10px 12px;justify-content:space-between}
   #netCode{font:900 32px ui-monospace,monospace;letter-spacing:7px;color:#ffb43a;text-shadow:0 0 10px rgba(255,180,58,.6)}
   #netStatus{min-height:20px;font-size:15px;color:#f6c343;margin-top:8px}
   #net .padfocus{outline:3px solid #f6c343;outline-offset:3px}
   #net hr{border:0;border-top:2px solid #f4f1e8;opacity:.2;margin:12px 0}
+  #net .row.small{margin:4px 0;gap:14px;flex-wrap:wrap}
+  #net .sect{font:italic 900 17px 'Barlow Condensed',sans-serif;color:#f6c343;letter-spacing:.04em}
+  #netRooms{max-height:150px;overflow:auto;border:1px solid #3a2360;border-radius:4px;background:#150a28}
+  #netRooms .empty{padding:10px 12px;color:#a99bcc;font-size:14px}
+  #netRooms .room{display:flex;align-items:center;gap:8px;padding:5px 8px;border-bottom:1px solid #2a1748}
+  #netRooms .rc{font:800 15px ui-monospace,monospace;color:#ffb43a;letter-spacing:2px}
+  #netRooms .rn{flex:1;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #netRooms .rn em{font-style:normal;color:#ff8a9a;font-size:12px}
+  #netRooms .rs{font-size:13px;color:#c3b6e0}
+  #netRooms button{padding:4px 12px;font-size:15px}
+  #net{max-height:calc(100vh - 30px);overflow:auto}
   #acct{position:fixed;left:50%;top:50%;transform:translate(-50%,-47%);width:min(440px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;
-       background:rgba(12,17,38,.97);border-top:4px solid #ff4f8b;border-radius:6px;padding:14px 22px;color:#e6e9f8;box-shadow:0 14px 44px rgba(0,0,0,.55);font-size:16px}
-  #acct h2{margin:0 0 2px;font:italic 900 32px 'Barlow Condensed',sans-serif;color:#fff}
+       background:rgba(30,14,54,.97);border-top:4px solid #ff4f8b;border-radius:14px;padding:14px 22px;color:#efe8fb;box-shadow:0 14px 44px rgba(0,0,0,.55);font-size:16px}
+  #acct h2{margin:0 0 2px;font:400 26px 'Dela Gothic One','Barlow Condensed',sans-serif;color:#fff}
   #acct h2::after{content:'';display:block;width:120px;height:4px;margin-top:4px;background:linear-gradient(90deg,#ff4f8b,#f6c343,#2fae5b,#4aa8ff)}
-  #acct p.sub{margin:8px 0 10px;color:#aeb5d8;font-size:15px;line-height:1.35}
-  #acct ul{margin:0 0 10px;padding-left:18px;color:#c9cfe8;font-size:15px;line-height:1.4}
+  #acct p.sub{margin:8px 0 10px;color:#c3b6e0;font-size:15px;line-height:1.35}
+  #acct ul{margin:0 0 10px;padding-left:18px;color:#d4c8ea;font-size:15px;line-height:1.4}
   #acct .tabs{display:flex;gap:6px;margin:10px 0 6px}
   #acct .tabs button{flex:1}
-  #acct .tabs button.on{background:#f6c343;color:#141a3a}
-  #acct label.f{display:block;font-size:14px;color:#c9cfe8;margin:6px 0 2px}
+  #acct .tabs button.on{background:#f6c343;color:#1b1030}
+  #acct label.f{display:block;font-size:14px;color:#d4c8ea;margin:6px 0 2px}
   #acct .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  #acct input,#acct select{width:100%;box-sizing:border-box;font:600 17px 'Barlow Condensed',sans-serif;padding:6px 10px;border-radius:4px;border:2px solid #283466;background:#070a18;color:#fff}
+  #acct input,#acct select{width:100%;box-sizing:border-box;font:600 17px 'Barlow Condensed',sans-serif;padding:6px 10px;border-radius:4px;border:2px solid #3a2360;background:#150a28;color:#fff}
   #acct input:focus,#acct select:focus{border-color:#f6c343;outline:none}
   #acct .row{display:flex;gap:8px;margin:10px 0 0;align-items:center;flex-wrap:wrap}
   #acct button{font:italic 800 18px 'Barlow Condensed',sans-serif;padding:9px 18px;border:0;background:#ff4f8b;color:#fff;cursor:pointer;
        clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}
-  #acct button.ghost{background:#283466;color:#dfe2f5}
+  #acct button.ghost{background:#3a2360;color:#e8e0f6}
   #acct button.link{background:none;color:#9fc3ff;padding:4px 0;clip-path:none;font:600 15px 'Barlow Condensed',sans-serif;text-decoration:underline}
   #acct button:hover{filter:brightness(1.12)}
   #acct button:disabled{opacity:.5;cursor:default}
   #acStatus{min-height:18px;font-size:15px;color:#f6c343;margin-top:6px}
-  #acct .hint{font-size:13px;color:#8f97bf;margin-top:3px}
+  #acct .hint{font-size:13px;color:#a99bcc;margin-top:3px}
+  #friendAdd{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(400px,calc(100vw - 32px));background:rgba(30,14,54,.98);
+       border-top:4px solid #2fae5b;border-radius:14px;padding:14px 22px;color:#efe8fb;box-shadow:0 14px 44px rgba(0,0,0,.55)}
+  #friendAdd h2{margin:0;font:400 24px 'Dela Gothic One','Barlow Condensed',sans-serif;color:#fff}
+  #friendAdd p.sub{margin:6px 0 10px;color:#c3b6e0;font-size:15px;line-height:1.35}
+  #friendAdd input{width:100%;box-sizing:border-box;font:600 18px 'Barlow Condensed',sans-serif;padding:7px 10px;border-radius:4px;border:2px solid #3a2360;background:#150a28;color:#fff}
+  #friendAdd .row{display:flex;gap:8px;margin-top:10px}
+  #friendAdd button{font:italic 800 18px 'Barlow Condensed',sans-serif;padding:8px 18px;border:0;background:#2fae5b;color:#fff;cursor:pointer;clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+  #friendAdd button.ghost{background:#3a2360;color:#e8e0f6}
 </style>
 </head>
 <body>
@@ -62,12 +81,16 @@
   <p class="sub">Peer-to-peer with rollback netcode. One of you hosts, the other joins with the code.</p>
   <div class="row"><button id="netHost">Host a room</button>
     <label>Input delay <select id="netDelay"><option>0</option><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label></div>
+  <div class="row small"><label><input type="checkbox" id="netListed" checked> Show my room in the list</label><label><input type="checkbox" id="netSpectate" checked> Let people watch</label></div>
   <div class="row hidden" id="netCodeBox"><span id="netCode"></span><button class="ghost" id="netCopy">Copy</button></div>
   <hr>
   <div class="row"><input id="netCodeIn" type="text" maxlength="5" placeholder="CODE" autocomplete="off"><button id="netJoin">Join</button></div>
   <div class="row"><label><input type="checkbox" id="netLocal"> Same computer (two browser tabs, for testing)</label></div>
   <div id="netStatus"></div>
-  <div class="row" style="justify-content:flex-end;margin-bottom:0"><button class="ghost" id="netBack">Back</button></div>
+  <hr>
+  <div class="row" style="justify-content:space-between;margin-bottom:4px"><b class="sect">OPEN ROOMS</b><button class="ghost" id="netRefresh">Refresh</button></div>
+  <div id="netRooms"><div class="empty">Loading…</div></div>
+  <div class="row" style="justify-content:space-between;margin-bottom:0"><span><button class="ghost" id="netFriends">Friends</button> <button class="ghost" id="netLeaders">Leaderboards</button></span><button class="ghost" id="netBack">Back</button></div>
 </div>
 <div id="acct" class="hidden">
   <h2 id="acTitle">ACCOUNT</h2>
@@ -92,14 +115,20 @@
   <div id="acStatus"></div>
   <div class="row" style="justify-content:flex-end;margin-top:4px"><button class="ghost" id="acBack">Back</button></div>
 </div>
+<div id="friendAdd" class="hidden">
+  <h2>ADD A FRIEND</h2>
+  <p class="sub">Type their display name. Once they add you back, you're friends: you'll see when they're online and can invite each other to rooms.</p>
+  <input id="frName" type="text" maxlength="16" autocomplete="off" placeholder="Display name">
+  <div class="row"><button id="frGo">Add</button><button class="ghost" id="frCancel">Cancel</button></div>
+</div>
 <input type="file" id="repFile" accept=".umarep,.json,application/json" class="hidden">
 <script>/*__PEERJS__*/</script>
 <script>/*__SUPABASE__*/</script>
-<script>/*__MUSIC__*/</script>
 <script>/*__LOGO__*/</script>
 <script>
 /*__ASSETS__*/
 /*__CODE__*/
 </script>
+<!--__MUSIC__-->
 </body>
 </html>

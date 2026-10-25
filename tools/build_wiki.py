@@ -16,7 +16,7 @@ def _png(path, w=None):
     if w and im.width > w: im = im.resize((w, round(im.height * w / im.width)), Image.LANCZOS)
     b = io.BytesIO(); im.save(b, 'PNG', optimize=True); return 'data:image/png;base64,' + base64.b64encode(b.getvalue()).decode()
 VERSION = __import__('re').search(r"const VERSION = '([^']+)'", open(ROOT+'/src/ui.js').read()).group(1)
-LOGO = _png(ROOT+'/assets/art/logo.png', 720); ICON = _png(ROOT+'/assets/art/icon-64.png')
+LOGO = _png(ROOT+'/assets/art/logo.png', 720); LOGO_ERA = _png(ROOT+'/assets/art/logo-era.png', 720); ICON = _png(ROOT+'/assets/art/icon-64.png')
 E = html.escape
 nm = lambda cid: D['chars'][cid]['name'].title().replace('Mcqueen', 'McQueen')
 archname = lambda a: a.title().replace(' And ', ' and ')
@@ -36,6 +36,17 @@ def cell(cid, anim, fi):
     i = a[0] + min(fi, a[1] - 1)
     c = im.crop(((i % cols) * 64, (i // cols) * 64, (i % cols) * 64 + 64, (i // cols) * 64 + 64))
     return c.transpose(Image.FLIP_LEFT_RIGHT)          # facing right = mirrored "r" layer, as in the game
+def shadow(c):   # Sunday Silence: the game's shadow palette (render.js shadowColour)
+    import colorsys
+    px = c.load()
+    for y in range(c.height):
+        for x in range(c.width):
+            r, g, b, a = px[x, y]
+            if not a: continue
+            h, l, s_ = colorsys.rgb_to_hls(r / 255, g / 255, b / 255); h *= 360
+            if 30 <= h <= 62 and s_ > 0.55 and 0.45 < l < 0.85: px[x, y] = (255, 214, 70, a)
+            else: rr, gg, bb = colorsys.hls_to_rgb(268 / 360, 0.05 + l * 0.2, 0.35); px[x, y] = (round(rr * 255), round(gg * 255), round(bb * 255), a)
+    return c
 def head(cid):
     c = cell(cid, '800', 0); bb = c.getbbox() or (0, 0, 64, 64)
     cx = (bb[0] + bb[2]) // 2; return c.crop((cx - 13, bb[1], cx + 13, bb[1] + 26))
@@ -50,11 +61,14 @@ def strip(cid, anim, scale=3):
 # move image: game pixels around the fighter, x -100..230, 270 tall, following her up for air moves
 VW, VH, OX = 330, 270, 100
 def oy(f):
-    boxes = f['hits'] + f['grab'] + f['refl'] + [b[:4] for b in f['projs']] + ([f['hurt']] if f['hurt'] else [])
+    boxes = f['hits'] + f['grab'] + f['refl'] + [b[:4] for b in f['projs']] + ([f['hurt']] if f['hurt'] else []) + ((f['pup']['hits'] + [[f['pup']['x'] - 30, f['pup']['y'] - 190, 60, 190]]) if f.get('pup') else [])
     top = min([f['y'] - 200] + [b[1] - 10 for b in boxes])
     return -top
 def move_img(cid, f):
     can = Image.new('RGBA', (VW, VH)); OY = oy(f)
+    if f.get('pup'):   # the Friend, behind the boxes
+        P = f['pup']; pp = shadow(cell(cid, P['anim'], P['fi'])).resize((192, 192), Image.NEAREST)
+        can.alpha_composite(pp, (OX + P['x'] - 96, OY + P['y'] - 192))
     sp = cell(cid, f['anim'], f['fi']).resize((192, 192), Image.NEAREST)
     can.alpha_composite(sp, (OX - 96, OY + f['y'] - 192))
     return uri(can)
@@ -65,7 +79,7 @@ def overlay(f):
     if f['hurt']: parts.append(r(f['hurt'], 'hu'))
     for b in f['refl']: parts.append(r(b, 'rf'))
     for b in f['grab']: parts.append(r(b, 'gr'))
-    for b in f['hits']: parts.append(r(b, 'hi'))
+    for b in f['hits'] + (f['pup']['hits'] if f.get('pup') else []): parts.append(r(b, 'hi'))
     for b in f['projs']: parts.append(r(b, 'pj'))
     return f'<svg class="box" viewBox="0 0 {VW} {VH}" aria-hidden="true">{"".join(parts)}</svg>'
 
@@ -92,6 +106,7 @@ EXTRA = {('vo', 'jL'): 'Also hits behind her, so it crosses up.', ('vo', 'jM'): 
 NAMES = {**NORMAL_NAMES, '2M': 'Crouching M', '2H': 'Crouching H', '6M': 'Hop Overhead', 'throw': 'Throw', 'GC': 'Counter Spurt'}
 NOTATION = {'throw': 'L+M', 'GC': 'S+H (blocking)', '6M': '6M', 'dL': '66L', 'dM': '66M', 'dH': '66H', 'jL': 'j.L', 'jM': 'j.M', 'jH': 'j.H'}
 
+LEAD = {}
 def props(cid, mid, f, m):
     """bullet list of properties read from the data"""
     out = []
@@ -103,12 +118,14 @@ def props(cid, mid, f, m):
     if f.get('cw'): out.append(f'Catches strikes on frames {f["cw"][0]}–{f["cw"][1]}' + (' and parries projectiles.' if f['cproj'] else '. Throws and projectiles beat it.'))
     if m['hard']: out.append('Hard knockdown (no quick rise).')
     elif m['kd'] and mid not in ('GC', 'dH'): out.append('Knocks down.')
-    if f['projs']: out.append('Projectile.')
+    if f['projs'] and not m.get('trap'): out.append('Projectile.')
+    if m.get('trap'): out.append('Leaves a potion on the floor: it arms, then goes off when stepped on, on a timer, or with Catalyst. Any hit or projectile pops it.')
     return out
 
 # ------------------------------------------------------------------ html pieces
 def advc(v, m, kind): return adv(v, m, kind)
 def recov(m):
+    if m.get('pup'): return None   # Cafe recovers long before the Friend's attack ends
     if m['startup'] and m['active']: return m['total'] - (m['startup'] + m['active'] - 1)
     if m['startup']: return m['total'] - m['startup']
     return None
@@ -177,6 +194,9 @@ def super_notes(cid, m):
                 f'Up close to midrange all six hit for {m["dmg"]:,} and end in a hard knockdown. From full screen, or against a juggled or crouching opponent, some can fly past.',
                 "Goes through normal projectiles and can't be reflected. Costs no juggle points, so it works as a combo ender.",
                 'Punishable on block up close, safe from range.']
+    if cid == 'jp':
+        return ['Full Spurt gauge (100). Invincible on frames 1–16.', 'A command grab: it can\'t be blocked, and if it catches them the whole cinematic plays out.',
+                'Unlike her other grabs, it can catch someone in hitstun, so cancel into it at the end of a grounded combo. It still misses a juggled opponent.']
     return ['Full Spurt gauge (100).', 'Invincible sprint. If the first hit lands, the whole cinematic plays out, even on a juggled opponent. Cancel into it at the end of a combo.']
 
 def sprite_box(cid, anim, cls, scale=3, spd=0.13):
@@ -190,11 +210,13 @@ def char_page(cid, idx):
     if c['flags']['airDash']: traits.append('Air dash')
     if c['flags']['lightChain']: traits.append('2L chains into itself')
     if c['flags']['dashCancel']: traits.append('Dash cancel (10 Spurt)')
-    if c['flags']['projMax'] > 1: traits.append(f"{c['flags']['projMax']} projectiles on screen")
+    if c['flags']['projMax'] > 1: traits.append(f"Up to {c['flags']['projMax']} potions out" if c['arch'] == 'SET-PLAY' else f"{c['flags']['projMax']} projectiles on screen")
+    if c['flags'].get('puppet'): traits.append('Puppet: her skills command the Friend')
+    if c['arch'] == 'GRAPPLER': traits.append('Three command grabs, grab super')
     if c['flags'].get('punisher'): traits.append('Punish: +20% on recovering foes')
     if c['flags'].get('specialChain'): traits.append('Special chain on hit')
     if c['flags'].get('lowHpBoost'): traits.append('Miracle Mode below 30% HP')
-    if c['backdash']: traits.append(f"Long backdash ({c['backdash']['inv']}f invuln)")
+    if c['backdash']: traits.append('Long backdash' if c['backdash']['total'] >= 22 else 'Quick backdash')
     infobox = f"""<aside class="infobox" style="--char:{col}">
   <div class="ibtitle">{E(nm(cid))}</div>
   <div class="ibport">{sprite_box(cid, '800', 'big')}</div>
@@ -218,7 +240,7 @@ def char_page(cid, idx):
   <h1 class="ptitle">{E(nm(cid))}</h1>
   <p class="tagline">From Uma Versus Wiki · build {BUILD}</p>
   {infobox}
-  <p class="lead"><b>{E(nm(cid))}</b> is the {E(archname(c['arch']).lower())} of the cast. {E(c['blurb'].split('. ', 1)[1])}</p>
+  <p class="lead"><b>{E(nm(cid))}</b> is the {E(archname(c['arch']).lower())} of the cast. {E(LEAD.get(cid) or c['blurb'].split('. ', 1)[1])}</p>
   <nav class="toc" aria-label="Contents"><p class="toch">Contents</p><ol>{''.join(f'<li><a href="#{cid}.{a}">{b}</a></li>' for a, b in toc)}</ol></nav>
   <h2 id="{cid}.overview">Overview</h2>
   <p class="archline"><b>{E(archname(c['arch']))}: {E(arch_t)}.</b> {E(arch_d)}</p>
@@ -230,6 +252,7 @@ def char_page(cid, idx):
   {normals}
   <h2 id="{cid}.skills">Skills</h2>
   <p class="note">Motion + L or M for the free versions, + H for EX (50 Spurt). Images show the M version. <b>*</b> = best case for air moves (hitting as low as possible).</p>
+  {'<p class="note">Skills named <i>Friend:</i> are carried out by Sunday Silence. Cafe recovers long before the attack ends, so recovery is shown as −. If the Friend is hit while she attacks, she\'s gone for 4 seconds.</p>' if cid == 'mc' else ''}
   {''.join(skill_card(cid, m, mv) for m in skills)}
   <h2 id="{cid}.super">Super</h2>
   {super_card(cid, mv)}
@@ -239,13 +262,16 @@ def char_page(cid, idx):
   <h2 id="{cid}.tips">Tips</h2><ul>{''.join(f'<li>{E(x)}</li>' for x in t['tips'])}</ul>
 </section>"""
 
+SOCIAL = [('Discord', 'https://discord.gg/gUgfWuWhQh'), ('YouTube', 'https://www.youtube.com/@UmaVersus'), ('TikTok', 'https://www.tiktok.com/@uma.versus')]
+SOCIAL_LI = ''.join(f'<li><a href="{u}" target="_blank" rel="noopener">{n}</a></li>' for n, u in SOCIAL)
 def side():
     chars = ''.join(f'<li><a href="#{cid}" data-go="{cid}"><img class="ico" src="{uri(head(cid))}" alt="">{E(nm(cid))}</a></li>' for cid in ORDER)
     return f"""<nav class="side" aria-label="Wiki">
   <div class="portal"><p class="ph">Navigation</p><ul><li><a href="#home" data-go="home">Main page</a></li><li><a href="#systems" data-go="systems">How to play</a></li></ul></div>
   <div class="portal"><p class="ph">Characters</p><ul>{chars}</ul></div>
   <div class="portal"><p class="ph">Game</p><ul><li><a href="#stages" data-go="stages">Stages</a></li></ul></div>
-  <div class="portal"><p class="ph">Patch notes</p><ul><li><a href="#update18" data-go="update18">Update 1.8</a></li><li><a href="#update17" data-go="update17">Update 1.7</a></li><li><a href="#update16" data-go="update16">Update 1.6</a></li><li><a href="#update15" data-go="update15">Update 1.5</a></li><li><a href="#update1" data-go="update1">Update 1</a></li></ul></div>
+  <div class="portal"><p class="ph">Links</p><ul>{SOCIAL_LI}</ul></div>
+  <div class="portal"><p class="ph">Patch notes</p><ul><li><a href="#update2" data-go="update2">Update 2</a></li><li><a href="#update18" data-go="update18">Update 1.8</a></li><li><a href="#update17" data-go="update17">Update 1.7</a></li><li><a href="#update16" data-go="update16">Update 1.6</a></li><li><a href="#update15" data-go="update15">Update 1.5</a></li><li><a href="#update1" data-go="update1">Update 1</a></li></ul></div>
 </nav>"""
 
 roster2 = ''.join(f"""<a class="rcard" href="#{cid}" data-go="{cid}" style="--char:{D['chars'][cid]['color']}">{sprite_box(cid, '800', 'mid')}
@@ -255,14 +281,14 @@ HOME2 = f"""
 <section class="view" id="v-home" data-view="home">
   <h1 class="ptitle">Uma Versus Wiki</h1>
   <p class="tagline">Update {VERSION} · build {BUILD}</p>
-  <img class="homelogo" src="{LOGO}" alt="Uma Versus logo">
-  <div class="welcome"><p>The wiki for <b>Uma Versus</b>, a fan-made Umamusume fighting game you play in the browser. Frame data and combos come straight from the game, so they're accurate for build <span class="mono">{BUILD}</span>.</p></div>
+  <img class="homelogo" src="{LOGO_ERA}" alt="Uma Versus: Beginning of a New Era">
+  <div class="welcome"><p>The wiki for <b>Uma Versus</b>, a fan-made Umamusume fighting game you play in the browser.</p><p>Community: {' · '.join(f'<a href="{u}" target="_blank" rel="noopener">{n}</a>' for n, u in SOCIAL)}</p></div>
   <h2>Characters</h2>
   <div class="roster">{roster2}</div>
   <h2>Archetypes</h2>
   <div class="tw"><table class="atab"><thead><tr><th>Archetype</th><th>Plays like</th><th>Characters</th></tr></thead><tbody>{archrows}</tbody></table></div>
   <h2>Getting started</h2>
-  <ul><li><a href="#systems" data-go="systems">How to play</a>: controls, notation, defense and combos</li><li><a href="#stages" data-go="stages">Stages</a></li><li><a href="#update18" data-go="update18">Latest patch notes (1.8.2)</a></li></ul>
+  <ul><li><a href="#systems" data-go="systems">How to play</a>: controls, notation, defense and combos</li><li><a href="#stages" data-go="stages">Stages</a></li><li><a href="#update2" data-go="update2">Latest patch notes (Update 2)</a></li></ul>
 </section>"""
 
 CSS = """
@@ -412,6 +438,71 @@ STAGESV = f"""
   <p>You pick the course after character select, or choose <b>Random</b>. Every stage is the same size, so they're just for looks. Online, the host picks.</p>
   <div class="stgs">{stage_cards}</div>
 </section>"""
+UPDATE2 = f"""
+<section class="view" id="v-update2" data-view="update2" hidden>
+  <h1 class="ptitle">Update 2</h1>
+  <p class="tagline">Patch notes · Update 2.0.0 · build {BUILD}</p>
+  <div class="prose">
+  <p class="lead"><b>Update 2.0.0 is out!</b></p>
+  <p>Four new characters bring the roster to twelve total, plus Arcade mode, a Tutorial, color palettes, a freshened-up UI, and a lot more for online.</p>
+  <h2>New runners</h2>
+  <ul>
+  <li>Jungle Pocket (Grappler): three command grabs (close, running, and anti-air), an armored charge, a throw super, and now the tankiest character in the game.</li>
+  <li>Agnes Tachyon (Set-play): potions that sit on the floor as traps, a timed flask, and a skill to set them all off at once.</li>
+  <li>Manhattan Cafe (Puppet): her skills send her Friend (Sunday Silence) to attack.</li>
+  <li>Dantsu Flame (Footsies): the fastest in the cast, a long poke for dash punishes, and a cheese wheel.</li>
+  </ul>
+  <h2>New modes</h2>
+  <ul>
+  <li>Arcade: seven CPU battles, then your runner's rival as the final boss, with an ending for every character.</li>
+  <li>Tutorial: seven short lessons that teach the game's fundamentals.</li>
+  </ul>
+  <h2>New look</h2>
+  <ul>
+  <li>Every menu and the fight HUD have a new look.</li>
+  <li>Character select shows stat ranks (D to S) for each runner.</li>
+  <li>Callouts pop up on each player's side during fights: Invincibles, Punishes, Counters, and more.</li>
+  </ul>
+  <h2>Online</h2>
+  <ul>
+  <li>Room list: hosts can show their room in a public list, and anyone can join or watch from it.</li>
+  <li>Spectating: up to four people can watch a room.</li>
+  <li>Friends: add players by display name, see when they're online, and invite them to your room.</li>
+  <li>Leaderboards: most wins, win rate, and most matches played.</li>
+  <li>Connection quality shows in the lobby before you play, and rollback stats show during the match.</li>
+  </ul>
+  <h2>Gameplay</h2>
+  <ul>
+  <li>Color palettes: six per runner (Original, Rival, Midnight, Gold Cup, Snowfall, Sakura), picked with up/down on character select.</li>
+  <li>Dash button (optional, set it in Controls): does the double-tap dash for you. Back + Dash backdashes. Dash + L/M/H does a dash attack. (66L, etc.)</li>
+  <li>Counter Spurt breaks command grabs: use it right as a command grab connects to break free (50 Spurt cost). Normal throws are still teched as usual</li>
+  <li>Backdash is no longer invincible to attacks, but is still immune to throws.</li>
+  </ul>
+  <h2>Balance</h2>
+  <ul>
+  <li>Daiwa Scarlet: damage ×0.88 → ×0.95. 5L and 5M recover 1 frame faster. Scarlet Shot, Ground Rose, and High Top Line recover 2 frames faster.</li>
+  <li>Tokai Teio: Imperial Rush starts on frame 4 (was 3), so it no longer punishes moves that are −5 on block. Moves that are -5 on block are now fully safe on block.</li>
+  <li>Gold Ship: 5L, 2L, 5M, 5H and Dash Jab recover 1 frame slower.</li>
+  <li>Mejiro McQueen: Long-Distance Stride starts on frame 8 (was 6).</li>
+  <li>Vodka: Pit Stop starts on frame 6 (was 4) and does 1,100 damage (was 1,250), 1,450 EX (was 1,650).</li>
+  <li>Silence Suzuka: 9,000 health (was 8,500). Lead the Pack is invincible for longer: frames 1–10 (L 1–5, EX 1–14).</li>
+  </ul>
+  <h2>CPU</h2>
+  <p>The CPU got a big rework because it was ass.</p>
+  <ul>
+  <li>Fixed the CPU sometimes standing still for several seconds.</li>
+  </ul>
+  <h2>Fixes and quality of life</h2>
+  <ul>
+  <li>Replays can be deleted: X or Delete (Y on a gamepad), then press again to confirm. There's also a Delete all option, and the list scrolls now.</li>
+  <li>Older replays show a warning before they play.</li>
+  <li>Training: hitboxes stay visible after they connect (show dimmer), and the dummy can't drop below 1 health (to prevent it getting bugged out if you killed it somehow).</li>
+  <li>The game opens/loads faster.</li>
+  <li>Options is shorter: the character themes list is now gone from the menu.</li>
+  <li>Can now back out of character selection screens on controller (will also have a confirm to exit pop-up now).</li>
+  </ul>
+  </div>
+</section>"""
 UPDATE18 = f"""
 <section class="view" id="v-update18" data-view="update18" hidden>
   <h1 class="ptitle">Update 1.8</h1>
@@ -505,6 +596,47 @@ UPDATE16 = f"""
   </div>
 </section>"""
 
+
+# ---- the older patch-note pages come from tools/wiki_patch_notes.txt, written by the game's author.
+# Format: "Update X" starts a page; a short line with no full stop is a subheading; a line before any
+# subheading is the page's lead; every other line is a bullet.
+def _patch_pages():
+    import os, re as _re, html as _h
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wiki_patch_notes.txt')
+    pages, cur = [], None
+    for raw in open(path, encoding='utf-8').read().splitlines():
+        t = raw.strip()
+        m = _re.fullmatch(r'Update\s+([\d.]+):?', t)
+        if m: cur = {'v': m.group(1), 'items': []}; pages.append(cur); continue
+        if not t or cur is None: continue
+        heading = _re.fullmatch(r'\d+(\.\d+)+', t) or (not t.endswith(('.', '!', '?', ')')) and len(t.split()) <= 3)
+        cur['items'].append(('h' if heading else 'li', t))
+    out = {}
+    for pg in pages:
+        body, inlist, seen_h = [], False, False
+        for kind, t in pg['items']:
+            e = _h.escape(t, quote=False)
+            if kind == 'h':
+                if inlist: body.append('  </ul>'); inlist = False
+                body.append(f'  <h2>{e}</h2>'); seen_h = True
+            elif not seen_h:
+                body.append(f'  <p class="lead">{e}</p>')
+            else:
+                if not inlist: body.append('  <ul>'); inlist = True
+                body.append(f'  <li>{e}</li>')
+        if inlist: body.append('  </ul>')
+        vid = 'update' + pg['v'].replace('.', '')
+        out[vid] = f"""
+<section class="view" id="v-{vid}" data-view="{vid}" hidden>
+  <h1 class="ptitle">Update {pg['v']}</h1>
+  <p class="tagline">Patch notes</p>
+  <div class="prose">
+""" + '\n'.join(body) + """
+  </div>
+</section>"""
+    return out
+_pp = _patch_pages()
+UPDATE18, UPDATE17, UPDATE16, UPDATE15, UPDATE = _pp['update18'], _pp['update17'], _pp['update16'], _pp['update15'], _pp['update1']
 page = f"""<title>Uma Versus Wiki</title>
 <link rel="icon" type="image/png" href="{ICON}">
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -518,6 +650,7 @@ page = f"""<title>Uma Versus Wiki</title>
 {SYSTEMS}
 {''.join(char_page(cid, i) for i, cid in enumerate(ORDER, 1))}
 {STAGESV}
+{UPDATE2}
 {UPDATE18}
 {UPDATE17}
 {UPDATE16}

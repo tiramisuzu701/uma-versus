@@ -10,7 +10,7 @@ JS = r"""() => {
       startMatch('training', cid, 'spe'); G.training.meter = false;
       const [a, d] = G.p; a.x = 800; d.x = 800 + dist; a.meter = 100;
       startMove(a, id, true); let res = null;
-      for (let f = 0; f < 260; f++) { step([N(), block ? {...N(), r: 1, d: (CHARS[cid].moves[id].hits || []).some(h => h.guard === 'low') || (CHARS[cid].moves[id].proj && CHARS[cid].moves[id].proj.hit.guard === 'low') ? 1 : 0} : N()]);
+      for (let f = 0; f < 260; f++) { step([N(), block ? {...N(), r: 1, d: (CHARS[cid].moves[id].hits || []).some(h => h.guard === 'low') || (CHARS[cid].moves[id].proj && CHARS[cid].moves[id].proj.hit && CHARS[cid].moves[id].proj.hit.guard === 'low') || (CHARS[cid].moves[id].pup && CHARS[cid].moves[id].pup.hits.some(h => h.guard === 'low')) ? 1 : 0} : N()]);
         if (G.adv && G.adv.val !== null && res === null) res = G.adv.val; }
       const hit = block ? d.state : null;
       if (res !== null) return res;
@@ -58,26 +58,31 @@ JS = r"""() => {
     const c = CHARS[cid], moves = [];
     for (const [id, m] of Object.entries(c.moves)) {
       if (['GC', 'taunt', 'SU'].includes(id) && id !== 'SU') {}
-      const hits = m.hits || [], ph = m.proj ? [m.proj.hit] : [], sh = (m.shots || []).map(q => q.hit), allHits = [...hits, ...ph, ...sh];
+      // a trap's damage is in its burst; Cafe's skills hit with the Friend (pup), timed from the command frame
+      const projHit = q => q ? (q.hit || (q.trap && q.trap.burst.hit)) : null;
+      const pupEv = m.pup && m.ev ? Math.min(...Object.keys(m.ev).map(Number)) : 0;
+      const hits = m.hits || (m.pup ? m.pup.hits.map(h => ({ ...h, f: [h.f[0] + pupEv, h.f[1] + pupEv] })) : []);
+      const ph = m.proj ? [projHit(m.proj)] : [], sh = (m.shots || []).map(q => q.hit), allHits = [...hits, ...ph, ...sh];
       const evFrames = m.ev ? Object.keys(m.ev).map(Number) : [];
       const startup = hits.length ? Math.min(...hits.map(h => h.f[0])) : (m.grab ? m.grab[0] : ((m.proj || m.shots) && evFrames.length ? Math.min(...evFrames) : null));
       const lastActive = hits.length ? Math.max(...hits.map(h => h.f[1])) : (m.grab ? m.grab[1] : null);
-      let dmg = hits.reduce((s, h) => s + h.dmg, 0) + ph.reduce((s, h) => s + h.dmg * (m.proj.hits || 1), 0) + (m.proj2 ? m.proj2.hit.dmg : 0) + (m.throwDmg || 0) + sh.reduce((s, h) => s + h.dmg, 0);
+      let dmg = hits.reduce((s, h) => s + h.dmg, 0) + ph.reduce((s, h) => s + h.dmg * (m.proj.hits || 1), 0) + (m.proj2 ? projHit(m.proj2).dmg : 0) + (m.throwDmg || 0) + sh.reduce((s, h) => s + h.dmg, 0);
       if (m.cine) dmg = m.cine.reduce((s, st) => s + (st[3] || 0), 0) + hits.reduce((s, h) => s + h.dmg, 0);
       dmg = Math.round(dmg * (c.dmgMul || 1));
       if (m.kind === 'super') dmg = superDmg(cid);   // supers: what actually lands on a fresh hit
       const guards = [...new Set(allHits.map(h => h.guard))];
       const ground = !m.air && m.kind !== 'taunt';
-      const airy = !!m.air && (hits.length || m.proj) && m.kind !== 'taunt';
+      const airy = !!m.air && (hits.length || m.proj) && m.kind !== 'taunt' && !m.pup;
       moves.push({ id, name: m.name || null, kind: m.kind, motion: m.motion || null, input: m.input || null, note: m.note || null, vnote: m.vnote || null, fnote: m.fnote || null,
         exNote: m.ex ? m.ex.note : null, isEx: !!m.isEx, varOf: m.varOf || null, exOf: m.exOf || null, followOf: m.followOf || null,
         startup, active: lastActive && startup ? lastActive - startup + 1 : null, total: m.total, dmg, guard: guards.join('/') || (m.grab ? 'throw' : ''),
         inv: m.inv || null, counter: m.counter ? m.counter.f : null, projInv: m.projInv || null, armor: m.armor ? (m.armorHits || 1) : 0, hard: allHits.some(h => h.hard), kd: allHits.some(h => h.kd),
+        trap: !!(m.proj && m.proj.trap), pup: !!m.pup,
         onHit: ground && (hits.length || m.proj) && !m.cine ? measure(cid, id, false) : airy ? airMeasure(cid, id, false) : null, shots: m.shots ? m.shots.length : 0,
         onBlock: ground && (hits.length || m.proj) && !m.cine ? measure(cid, id, true) : airy ? airMeasure(cid, id, true) : null, airAdv: airy });
     }
     out[cid] = { name: c.name, arch: c.arch, color: c.color, blurb: c.blurb, hp: c.hp, walk: c.walk, back: c.back, dash: c.dash, jumpV: c.jumpV,
-      flags: { airDash: !!c.airDash, lightChain: !!c.lightChain, dashCancel: !!c.dashCancel, projMax: c.projMax || 1, dmgMul: c.dmgMul || 1, punisher: !!c.punisher, specialChain: !!c.specialChain, lowHpBoost: !!c.lowHpBoost },
+      flags: { puppet: !!c.puppet, airDash: !!c.airDash, lightChain: !!c.lightChain, dashCancel: !!c.dashCancel, projMax: c.projMax || 1, dmgMul: c.dmgMul || 1, punisher: !!c.punisher, specialChain: !!c.specialChain, lowHpBoost: !!c.lowHpBoost },
       backdash: c.backdash || null, combos: c.combos, moves };
   }
   return JSON.stringify({ build: BUILD, chars: out });
@@ -86,7 +91,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(); pg = await b.new_page()
         errs=[]; pg.on('pageerror', lambda e: errs.append(str(e)))
-        await pg.goto('file://' + ROOT + '/index.html'); await pg.wait_for_timeout(800)
+        await pg.goto('file://' + ROOT + '/index.html', wait_until='domcontentloaded', timeout=120000); await pg.wait_for_timeout(3000)
         await pg.evaluate("() => { tick = () => {}; render = () => {}; }")
         data = await pg.evaluate(JS)
         open(ROOT+'/build/wiki/wiki_data.json','w').write(data)
