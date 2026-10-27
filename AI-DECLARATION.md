@@ -25,6 +25,6 @@ components:
 - Testing: the AI writes and runs the automated tests (combos, combo trials, inputs, online sync, menus). I and other players playtest every update.
 - Documentation: the README, patch notes, AI declaration, and wiki are written by me. The wiki's frame data is measured from the game, and its text was drafted by the AI and rewritten by me.
 - Deployment: the AI assisted with the packaging scripts and database setup. I publish the site on GitHub Pages and run the database changes myself.
-- Art and music: the art and music aren't mine (see Credits in the [README](README.md)); no AI was used for any of it. (->TO MY KNOWLEDGE<-)
+- Art and music: the art and music aren't mine (see Credits in the [README](README.md)); no AI was used for any of it. (->TO MY KNOWLEDGE<- Most assets were obtained from a friend and I chose to trust that they created it themself.)
 
 *This declaration follows the AI-DECLARATION.md format, version 0.1.2: https://ai-declaration.md/en/0.1.2/*
