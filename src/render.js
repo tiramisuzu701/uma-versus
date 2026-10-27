@@ -114,7 +114,10 @@ function recolour(img, fn, cid) {
     if (o === undefined) { const [r, g, b] = rgbOf(v); const q = fn(r, g, b).map(t => Math.max(0, Math.min(255, Math.round(t)))); o = pack(q[0], q[1], q[2], 0) & CM; memo.set(key, o); }
     u[i] = (v & AM) | o;
   }
-  x.putImageData(d, 0, 0); return c;
+  x.putImageData(d, 0, 0);
+  // hand back a normal (GPU-friendly) canvas: one read for willReadFrequently keeps the recoloured sheet in CPU
+  // memory, and drawing that onto the game canvas every frame meant re-uploading it every frame on some machines
+  const out = canvasOf(c.width, c.height); out.getContext('2d').drawImage(c, 0, 0); return out;
 }
 function warmPalettes() {
   if (typeof SPR === 'undefined') return;

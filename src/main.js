@@ -302,7 +302,7 @@ function tick() {
   if (UI.screen === 'spectate') { specTick(esc); return; }
   if (UI.screen === 'friends') { friendsTick(orEdges(me[0], me[1]), enter, esc); return; }
   if (UI.screen === 'leaders') { leadersTick(orEdges(me[0], me[1]), enter, esc); return; }
-  if (UI.screen === 'account') { acctScreenTick(orEdges(me[0], me[1]), enter, esc); return; }
+  if (UI.screen === 'account') { acctScreenTick(orEdges(me[0], me[1]), enter, esc, AP.mode ? padEdges(pad) : null); return; }
   if (UI.screen === 'replays') { replaysMenuTick(orEdges(me[0], me[1]), enter, esc, edges); return; }
   if (UI.screen === 'repwarn') { repWarnTick(orEdges(me[0], me[1]), enter, esc); return; }
   if (UI.screen === 'replay') { replayTick(orEdges(me[0], me[1]), edges, esc); return; }
@@ -691,6 +691,9 @@ function drawPerf() {
   ctx.fillStyle = 'rgba(0,0,0,.8)'; ctx.fillRect(0, 0, 214, 17);
   label(PERF.text || '…', 6, 9, 12, '#9dffb4', 'left', 700);
 }
+let panelT = 0;
+const PANEL_IDS = ['net', 'acct', 'friendAdd'];
+function panelOpen() { if (!['online', 'account', 'friends', 'leaders'].includes(UI.screen)) return false; for (const id of PANEL_IDS) { const el = document.getElementById(id); if (el && !el.classList.contains('hidden')) return true; } return false; }
 function loop(now) {
   const dt = 1000 / 60;
   if (PERF.on) {
@@ -710,7 +713,9 @@ function loop(now) {
   let n = 0;
   while (acc >= dt - 0.5 && n < 4) { tick(); acc -= dt; n++; }
   if (n === 4) acc = 0;   // way behind (tab was hidden, slow machine): don't try to catch up
-  if (n > 0) render();    // nothing changed since the last picture, so skip redrawing (saves work on 120 Hz+ screens)
+  // While an HTML panel (Online, Account, add friend) covers the screen, the menu art behind it only needs a few
+  // pictures a second; redrawing it at 60 fps under the panel made some machines freeze up on those screens.
+  if (n > 0 && (!panelOpen() || (panelT += n) >= 6)) { panelT = 0; render(); }   // (skip when nothing changed: 120 Hz+ screens)
   if (PERF.on) PERF.work += performance.now() - w0;
   requestAnimationFrame(loop);
 }

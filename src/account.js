@@ -29,11 +29,23 @@ function acctErr(e) {
 const NAME_RE = /^[A-Za-z0-9_. -]{3,16}$/;
 
 // ------------------------------------------------------------------ session
+// supabase-js shares one browser lock between all tabs of the site, and waits for it forever. A frozen or
+// background tab holding it left sign-in stuck on "Signing in…". Wait at most 4 s for the lock, then go ahead.
+async function acctLock(name, timeout, fn) {
+  if (typeof navigator === 'undefined' || !navigator.locks || !navigator.locks.request) return fn();
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), 4000); let got = false;
+  try { return await navigator.locks.request(name, { mode: 'exclusive', signal: ac.signal }, async () => { got = true; clearTimeout(t); return fn(); }); }
+  catch (e) { clearTimeout(t); if (!got && e && e.name === 'AbortError') return fn(); throw e; }
+}
+// no account request may leave the panel waiting forever (a dropped connection, a stalled lock)
+function acctTimeout(p, ms = 20000) {
+  return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("The account service didn't answer. Check your connection and try again.")), ms))]);
+}
 function acctInit() {
   if (!ACCT_CFG.url || !ACCT_CFG.key || typeof supabase === 'undefined') return;
   try {
     ACCT.client = supabase.createClient(ACCT_CFG.url, ACCT_CFG.key, {
-      auth: { persistSession: true, autoRefreshToken: true, storageKey: 'umavs.auth', detectSessionInUrl: location.protocol.startsWith('http') } });
+      auth: { persistSession: true, autoRefreshToken: true, storageKey: 'umavs.auth', detectSessionInUrl: location.protocol.startsWith('http'), lock: acctLock } });
     ACCT.on = true;
   } catch (e) { ACCT.on = false; return; }
   ACCT.client.auth.onAuthStateChange((ev, session) => {
@@ -45,7 +57,7 @@ function acctInit() {
 }
 async function acctSignIn(email, pass) {
   if (!ACCT.on || ACCT.busy) return; ACCT.busy = true; acctSay('Signing in…');
-  try { const { error } = await ACCT.client.auth.signInWithPassword({ email: email.trim(), password: pass }); if (error) throw error; acctSay('Signed in.'); Sfx.play('ok'); return true; }
+  try { const { error } = await acctTimeout(ACCT.client.auth.signInWithPassword({ email: email.trim(), password: pass })); if (error) throw error; acctSay('Signed in.'); Sfx.play('ok'); return true; }
   catch (e) { acctSay(acctErr(e), false); Sfx.play('deny'); return false; } finally { ACCT.busy = false; }
 }
 async function acctSignUp(email, pass, name, fav) {
@@ -55,23 +67,23 @@ async function acctSignUp(email, pass, name, fav) {
   if (pass.length < 6) { acctSay('Password must be at least 6 characters.', false); return false; }
   ACCT.busy = true; acctSay('Creating your account…');
   try {
-    const { data: free, error: e1 } = await ACCT.client.rpc('name_available', { n: name }); if (e1) throw e1;
+    const { data: free, error: e1 } = await acctTimeout(ACCT.client.rpc('name_available', { n: name })); if (e1) throw e1;
     if (!free) { acctSay('That name is taken.', false); Sfx.play('deny'); return false; }
     const opts = { data: { name, fav_runner: fav } }; if (location.protocol.startsWith('http')) opts.emailRedirectTo = location.origin + location.pathname;
-    const { data, error } = await ACCT.client.auth.signUp({ email: email.trim(), password: pass, options: opts }); if (error) throw error;
+    const { data, error } = await acctTimeout(ACCT.client.auth.signUp({ email: email.trim(), password: pass, options: opts })); if (error) throw error;
     if (!data.session) { acctSay('Check your email for a confirmation link, then sign in.'); Sfx.play('ok'); return 'confirm'; }
     acctSay('Account created. Welcome, ' + name + '!'); Sfx.play('fanfare'); return true;
   } catch (e) { acctSay(acctErr(e), false); Sfx.play('deny'); return false; } finally { ACCT.busy = false; }
 }
 async function acctSignOut() {
   if (!ACCT.on) return; await acctPush(true);
-  try { await ACCT.client.auth.signOut(); } catch (e) { }
+  try { await acctTimeout(ACCT.client.auth.signOut(), 8000); } catch (e) { }
   ACCT.user = null; ACCT.profile = null; ACCT.stats = null; ACCT.recent = []; acctSay('Signed out.'); Sfx.play('back');
 }
 async function acctReset(email) {
   if (!ACCT.on || !email.trim()) { acctSay('Type your email first.', false); return; }
   try { const o = location.protocol.startsWith('http') ? { redirectTo: location.origin + location.pathname } : {};
-    const { error } = await ACCT.client.auth.resetPasswordForEmail(email.trim(), o); if (error) throw error; acctSay('If that email has an account, a reset link is on its way.'); }
+    const { error } = await acctTimeout(ACCT.client.auth.resetPasswordForEmail(email.trim(), o)); if (error) throw error; acctSay('If that email has an account, a reset link is on its way.'); }
   catch (e) { acctSay(acctErr(e), false); }
 }
 
@@ -199,8 +211,25 @@ function initAcctPanel() {
 function acctOpen() { UI.screen = 'account'; ACCT.idx = 0; ACCT.status = ''; if (!ACCT.on) acctPanel('off'); else if (!ACCT.user) acctPanel('form'); else { acctPanel(null); acctRefresh(); } }
 // signed-in screen: gamepad / keyboard rows
 const ACCT_ROWS = ['fav', 'name', 'friends', 'leaders', 'sync', 'out', 'back'];
-function acctScreenTick(e, enter, esc) {
-  if (AP.mode) { if (esc || (e.H && !document.activeElement.matches('#acct input, #acct select'))) acctLeave(); return; }   // the panel handles typing itself
+// Gamepad on the sign-in / rename panel: up/down picks a control, A presses it (or puts the cursor in a text box),
+// B always goes back. Before this a pad could get stuck there: the email box takes focus, and B (H) was ignored
+// while a text box had focus, so only the keyboard's Esc got out.
+const APP = { i: 0 };
+function acctPanelPad(e) {
+  if (!Object.values(e).some(Boolean)) return;
+  if (e.H) { acctLeave(); return; }
+  const items = [...document.querySelectorAll('#acct button, #acct input, #acct select')].filter(el => el.offsetParent !== null && !el.disabled);
+  if (!items.length) return;
+  APP.i = Math.min(APP.i, items.length - 1);
+  if (e.u || e.d) { APP.i = (APP.i + (e.d ? 1 : items.length - 1)) % items.length; Sfx.play('menu'); }
+  const el = items[APP.i];
+  if ((e.l || e.r) && el.tagName === 'SELECT') { el.selectedIndex = Math.max(0, Math.min(el.options.length - 1, el.selectedIndex + (e.r ? 1 : -1))); Sfx.play('menu'); }
+  if (e.L || e.S) { if (el.tagName === 'BUTTON') { el.click(); Sfx.play('ok'); } else el.focus(); }
+  else if (e.u || e.d) { if (document.activeElement && document.activeElement !== el) document.activeElement.blur(); }
+  items.forEach((x, k) => x.classList.toggle('padfocus', k === APP.i));
+}
+function acctScreenTick(e, enter, esc, pe) {
+  if (AP.mode) { if (pe) acctPanelPad(pe); if (esc || (e.H && !document.activeElement.matches('#acct input, #acct select'))) acctLeave(); return; }   // the panel handles typing itself
   if (!ACCT.user) { acctPanel(ACCT.on ? 'form' : 'off'); return; }
   if (e.u) { ACCT.idx = (ACCT.idx + ACCT_ROWS.length - 1) % ACCT_ROWS.length; Sfx.play('menu'); }
   if (e.d) { ACCT.idx = (ACCT.idx + 1) % ACCT_ROWS.length; Sfx.play('menu'); }
