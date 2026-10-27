@@ -22,6 +22,7 @@ function acctErr(e) {
   if (/Password should be/i.test(m)) return 'Password must be at least 6 characters.';
   if (/profiles_name_unique|duplicate key/i.test(m)) return 'That name is taken.';
   if (/name_format/i.test(m)) return 'Names are 3–16 letters, numbers, spaces, _ . or -';
+  if (/name_blocked/i.test(m)) return "That name isn't allowed. Please pick another.";
   if (/rate limit/i.test(m)) return 'Too many tries. Wait a minute and try again.';
   return m;
 }
@@ -50,6 +51,7 @@ async function acctSignIn(email, pass) {
 async function acctSignUp(email, pass, name, fav) {
   if (!ACCT.on || ACCT.busy) return; name = name.trim();
   if (!NAME_RE.test(name)) { acctSay('Names are 3–16 letters, numbers, spaces, _ . or -', false); return false; }
+  if (nameBlocked(name)) { acctSay("That name isn't allowed. Please pick another.", false); Sfx.play('deny'); return false; }
   if (pass.length < 6) { acctSay('Password must be at least 6 characters.', false); return false; }
   ACCT.busy = true; acctSay('Creating your account…');
   try {
@@ -92,6 +94,7 @@ async function acctSetFav(cid) {
 async function acctRename(name) {
   if (!acctOn()) return false; name = name.trim();
   if (!NAME_RE.test(name)) { acctSay('Names are 3–16 letters, numbers, spaces, _ . or -', false); return false; }
+  if (nameBlocked(name)) { acctSay("That name isn't allowed. Please pick another.", false); Sfx.play('deny'); return false; }
   const { error } = await ACCT.client.from('profiles').update({ name }).eq('id', ACCT.user.id);
   if (error) { acctSay(acctErr(error), false); Sfx.play('deny'); return false; }
   ACCT.profile.name = name; acctSay('Name changed to ' + name + '.'); Sfx.play('ok'); return true;

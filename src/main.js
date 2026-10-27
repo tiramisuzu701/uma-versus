@@ -3,13 +3,13 @@
 
 // ------------------------------------------------------------------ keyboard / gamepad (remappable)
 const ACTIONS = [['u', 'Up / jump'], ['d', 'Down / crouch'], ['l', 'Left'], ['r', 'Right'], ['L', 'Light (L)'], ['M', 'Medium (M)'], ['H', 'Heavy (H)'],
-  ['S', 'Skill (S)'], ['THROW', 'Throw (L+M)'], ['SUPER', 'Super (S+H)'], ['TAUNT', 'Taunt (L+H)'], ['DASH', 'Dash (→→)']];
+  ['S', 'Skill (S)'], ['C', 'Counter Spurt'], ['THROW', 'Throw (L+M)'], ['SUPER', 'Super (S+H)'], ['TAUNT', 'Taunt (L+H)'], ['DASH', 'Dash (→→)']];
 const DEFAULT_KEYS = [
-  { u: ['KeyW'], d: ['KeyS'], l: ['KeyA'], r: ['KeyD'], L: ['KeyF'], M: ['KeyG'], H: ['KeyH'], S: ['KeyT'], THROW: ['KeyR'], SUPER: ['KeyY'], TAUNT: ['KeyE'], DASH: [] },
-  { u: ['ArrowUp'], d: ['ArrowDown'], l: ['ArrowLeft'], r: ['ArrowRight'], L: ['KeyJ', 'Numpad1'], M: ['KeyK', 'Numpad2'], H: ['KeyL', 'Numpad3'], S: ['KeyI', 'Numpad5', 'Numpad0'], THROW: ['KeyU', 'Numpad4'], SUPER: ['KeyO', 'Numpad6'], TAUNT: ['KeyP', 'Numpad7'], DASH: [] },
+  { u: ['KeyW'], d: ['KeyS'], l: ['KeyA'], r: ['KeyD'], L: ['KeyF'], M: ['KeyG'], H: ['KeyH'], S: ['KeyT'], C: ['KeyV'], THROW: ['KeyR'], SUPER: ['KeyY'], TAUNT: ['KeyE'], DASH: [] },
+  { u: ['ArrowUp'], d: ['ArrowDown'], l: ['ArrowLeft'], r: ['ArrowRight'], L: ['KeyJ', 'Numpad1'], M: ['KeyK', 'Numpad2'], H: ['KeyL', 'Numpad3'], S: ['KeyI', 'Numpad5', 'Numpad0'], C: ['Semicolon', 'Numpad8'], THROW: ['KeyU', 'Numpad4'], SUPER: ['KeyO', 'Numpad6'], TAUNT: ['KeyP', 'Numpad7'], DASH: [] },
 ];
 // gamepad buttons (standard layout). Directions are always d-pad + left stick.
-const DEFAULT_PAD = { u: [12], d: [13], l: [14], r: [15], L: [2], M: [3], H: [1], S: [0], THROW: [4], SUPER: [5], TAUNT: [8], DASH: [] };   // the dash button is unbound until you set it
+const DEFAULT_PAD = { u: [12], d: [13], l: [14], r: [15], L: [2], M: [3], H: [1], S: [0], C: [6], THROW: [4], SUPER: [5], TAUNT: [8], DASH: [] };   // the dash button is unbound until you set it
 let KEYMAP, PADMAP;
 function resetControls(save = true) {
   KEYMAP = JSON.parse(JSON.stringify(DEFAULT_KEYS)); PADMAP = JSON.parse(JSON.stringify(DEFAULT_PAD));
@@ -23,6 +23,12 @@ function loadControls() {
     if (st && st.v === 1) for (const [a] of ACTIONS) {
       for (const i of [0, 1]) if (st.keys && st.keys[i] && Array.isArray(st.keys[i][a])) KEYMAP[i][a] = st.keys[i][a];
       if (st.pad && Array.isArray(st.pad[a])) PADMAP[a] = st.pad[a];
+    }
+    // saves from before the Counter Spurt button: its default keys only where nothing else already uses them
+    if (st && st.v === 1) {
+      const others = (m, a) => Object.entries(m).filter(([k]) => k !== a).flatMap(([, v]) => v);
+      for (const i of [0, 1]) if (!(st.keys && st.keys[i] && st.keys[i].C)) KEYMAP[i].C = KEYMAP[i].C.filter(c => !others(KEYMAP[i], 'C').includes(c) && !others(KEYMAP[1 - i], '').includes(c));
+      if (!(st.pad && st.pad.C)) PADMAP.C = PADMAP.C.filter(b => !others(PADMAP, 'C').includes(b));
     }
   } catch (e) { }
 }
@@ -67,7 +73,7 @@ function bindPad(action, btn) {
 
 function kbInput(i, edges) {
   const m = KEYMAP[i], o = {}, on = c => keys.has(c) || edges.includes(c);
-  for (const k of ['u', 'd', 'l', 'r', 'L', 'M', 'H', 'S']) o[k] = m[k].some(on) ? 1 : 0;
+  for (const k of ['u', 'd', 'l', 'r', 'L', 'M', 'H', 'S', 'C']) o[k] = (m[k] || []).some(on) ? 1 : 0;
   if (m.THROW.some(on)) o.L = o.M = 1;
   if (m.SUPER.some(on)) o.S = o.H = 1;
   if (m.TAUNT.some(on)) o.L = o.H = 1;
@@ -111,7 +117,7 @@ function padInput(i) {
   const hat = hatDir(gp) || [0, 0, 0, 0];
   o.l = on('l') || ax < -0.5 || hat[2] ? 1 : 0; o.r = on('r') || ax > 0.5 || hat[3] ? 1 : 0;
   o.u = on('u') || ay < -0.5 || hat[0] ? 1 : 0; o.d = on('d') || ay > 0.5 || hat[1] ? 1 : 0;
-  for (const k of ['L', 'M', 'H', 'S']) o[k] = on(k) ? 1 : 0;
+  for (const k of ['L', 'M', 'H', 'S', 'C']) o[k] = (PADMAP[k] || []).some(b) ? 1 : 0;
   if (on('THROW')) o.L = o.M = 1;
   if (on('SUPER')) o.S = o.H = 1;
   if (on('TAUNT')) o.L = o.H = 1;
@@ -142,7 +148,7 @@ function applyDash(raw) {
     if (M.q.length) {
       const on = M.q.shift();
       o.l = o.r = 0; if (on) o[M.dir] = 1;
-      for (const b of ['L', 'M', 'H', 'S']) { if (o[b]) M.btn[b] = 1; o[b] = M.q.length ? 0 : (M.btn[b] || 0); }
+      for (const b of ['L', 'M', 'H', 'S', 'C']) { if (o[b]) M.btn[b] = 1; o[b] = M.q.length ? 0 : (M.btn[b] || 0); }
     } else if (dash && M.dir === fwd) o[fwd] = 1;   // keep running while it's held
   }
 }
@@ -240,7 +246,7 @@ function tick() {
   // A button still held from a menu (confirm, unpause, rematch) shouldn't count as a press once the
   // match is live, or gamepad A (Skill) fires a skill on the first frame. Ignore it until it's released.
   const live = UI.screen === 'game' && !UI.paused && G.phase !== 'match' && !(G.mode === 'online' && Net.menu);
-  for (const i of [0, 1]) for (const k of ['L', 'M', 'H', 'S']) {
+  for (const i of [0, 1]) for (const k of ['L', 'M', 'H', 'S', 'C']) {
     if (!raw[i][k]) BTN_LATCH[i][k] = false;
     else if (!live) BTN_LATCH[i][k] = true;
     else if (BTN_LATCH[i][k]) raw[i][k] = 0;
@@ -401,7 +407,7 @@ function tick() {
   }
   if (UI.screen === 'game' && G.mode === 'online') {
     if (Net.menu) {
-      if (conf(0) || conf(1) || enter) { netSend({ t: 'bye' }); netClose(false); UI.screen = 'online'; showNetPanel(); setStatus('You left the match.'); return; }
+      if (conf(0) || conf(1) || enter) { netBye(); netClose(false); UI.screen = 'online'; showNetPanel(); setStatus('You left the match.'); return; }
       if (esc || back(0) || back(1)) Net.menu = false;
     } else if (esc) Net.menu = true;
     if (netMatchConfirmedOver()) {   // results screen; keep resending inputs so the other side can finish too
@@ -417,7 +423,7 @@ function tick() {
   }
   if (UI.screen === 'game') {
     if (UI.paused) { pauseMenu(me, esc, enter, conf, back); return; }
-    if (esc) { UI.paused = true; UI.pauseIdx = 0; Sfx.play('page'); return; }
+    if (esc) { UI.paused = true; UI.pauseIdx = 0; UI.pauseSub = null; Sfx.play('page'); return; }
     if (G.mode === 'training') {
       if (edges.includes('Digit1')) cycle('dummy'); if (edges.includes('Digit2')) cycle('block');
       if (edges.includes('Digit3')) G.showBoxes = !G.showBoxes;
@@ -458,7 +464,17 @@ function tick() {
 const PICK_KEY = 'umavs.picks';
 function lastPicks(mode) { try { const o = JSON.parse(localStorage.getItem(PICK_KEY) || '{}')[mode]; if (o && o.length === 2) return o.map(v => Math.min(ROSTER.length, Math.max(0, v | 0))); } catch (e) { } return [0, 1]; }
 function rememberPick(side, v) { try { const all = JSON.parse(localStorage.getItem(PICK_KEY) || '{}'), cur = all[UI.pendingMode] || [0, 1]; cur[side] = v; all[UI.pendingMode] = cur; localStorage.setItem(PICK_KEY, JSON.stringify(all)); } catch (e) { } }
+// Nothing from Training, Combo Trials, the Tutorial, Arcade or a replay carries into the next match
+// (a stale TR.on gave Versus/online the trial pause menu with "Reset positions", which refilled health;
+// hitboxes switched on in a replay stayed on online)
+function leaveSideModes(mode, keepArcade) {
+  if (mode !== 'training') { TR.on = false; TR.demo = null; TUT.on = false; G.showBoxes = false; }
+  if (!keepArcade) ARC.on = false;
+  if (typeof Net !== 'undefined') Net.practice = false;   // netPractice() sets it again after starting
+  UI.paused = false; UI.pauseSub = null;
+}
 function beginLocalMatch() {
+  leaveSideModes(UI.pendingMode);
   TR.on = false; TR.demo = null; TUT.on = false; TOOLS.recState = TOOLS.rec && TOOLS.rec.length ? 'ready' : 'off'; TOOLS.hist = [[], []]; TOOLS.fm = [[], []];
   startMatch(UI.pendingMode, ROSTER[UI.sel[0]], ROSTER[UI.sel[1]], UI.pal);
   G.stage = UI.vsStage || 0; G.music = THEME_IDS[UI.musicIdx ?? 0] || ROSTER[UI.sel[0]];
@@ -491,6 +507,9 @@ function gameInputs(raw) {
   else if (t.dummy === 'jump') d.u = 1;
   else if (t.dummy === 'cpu') d = cpuInput(b, 2);
   else if (t.dummy === 'player 2') return raw;
+  // dummy throw tech and wake-up timing (Training options)
+  if (b.state === 'thrown' && b.t === 2 && (t.tech === 'always' || (t.tech === 'random' && ((G.frameCount * 2654435761) >>> 0) % 2 === 0))) { d.L = 1; d.M = 1; }
+  if (b.state === 'down') { if (t.wakeup === 'quick') d.L = 1; else if (t.wakeup === 'late') { d = { ...NEUTRAL, d: 1 }; } }
   const threat = a.state === 'attack' || a.state === 'cine' || a.airborne || G.projs.some(q => q.owner === a.side);
   if (t.block !== 'none' && t.dummy !== 'cpu' && b.state !== 'attack' && threat) {
     const doBlock = t.block === 'all' || (t.block === 'random' && ((G.frameCount >> 4) * 2654435761 >>> 0) % 2 === 0);
@@ -504,27 +523,56 @@ function gameInputs(raw) {
   }
   return [p1, d];
 }
-const DUMMY = ['stand', 'crouch', 'jump', 'cpu', 'player 2'], GUARD = ['none', 'all', 'random'];
+// Training options: each one cycles through its list. Saved in this browser.
+const TRAIN_OPTS = {
+  dummy: DUMMY_LIST(), block: ['none', 'all', 'random'],
+  p1Spurt: ['full', 'half', 'empty', 'normal'], dummySpurt: ['full', 'half', 'empty', 'normal'],
+  p1Hp: ['refill', 'low', 'off'], dummyHp: ['refill', 'low', 'off'],
+  counter: ['off', 'on'], tech: ['off', 'always', 'random'], wakeup: ['normal', 'quick', 'late'],
+};
+function DUMMY_LIST() { return ['stand', 'crouch', 'jump', 'cpu', 'player 2']; }
+const TRAIN_KEY = 'umavs.training';
+function saveTraining() { try { const o = {}; for (const k in TRAIN_OPTS) o[k] = G.training[k]; localStorage.setItem(TRAIN_KEY, JSON.stringify(o)); } catch (e) { } }
+(function loadTraining() {
+  try { const o = JSON.parse(localStorage.getItem(TRAIN_KEY) || 'null'); if (o) for (const k in TRAIN_OPTS) if (TRAIN_OPTS[k].includes(o[k])) G.training[k] = o[k]; } catch (e) { }
+})();
 function cycle(k) {
-  const list = k === 'dummy' ? DUMMY : GUARD;
+  const list = TRAIN_OPTS[k];
   G.training[k] = list[(list.indexOf(G.training[k]) + 1) % list.length]; Sfx.play('menu');
-  G.p[1].ai = null;
+  if (k === 'meter' || /Spurt$/.test(k)) G.training.meter = true;
+  G.p[1].ai = null; saveTraining();
+}
+function trainingOptionItems() {
+  const t = G.training, v = k => t[k].toUpperCase();
+  return [
+    ['‹ Back', () => { UI.pauseSub = null; UI.pauseIdx = 0; }],
+    [`Your Spurt: ${v('p1Spurt')}`, () => cycle('p1Spurt')],
+    [`Dummy Spurt: ${v('dummySpurt')}`, () => cycle('dummySpurt')],
+    [`Your health: ${{ refill: 'REFILL', low: 'LOW (30%)', off: 'NO REFILL' }[t.p1Hp]}`, () => cycle('p1Hp')],
+    [`Dummy health: ${{ refill: 'REFILL', low: 'LOW (30%)', off: 'NO REFILL' }[t.dummyHp]}`, () => cycle('dummyHp')],
+    [`Counter hit: ${v('counter')}`, () => cycle('counter')],
+    [`Dummy throw tech: ${v('tech')}`, () => cycle('tech')],
+    [`Dummy wake-up: ${v('wakeup')}`, () => cycle('wakeup')],
+    ['Reset all options', () => { Object.assign(G.training, { dummy: 'stand', block: 'none', meter: true, p1Spurt: 'full', dummySpurt: 'full', p1Hp: 'refill', dummyHp: 'refill', counter: 'off', tech: 'off', wakeup: 'normal' }); saveTraining(); Sfx.play('ok'); }],
+  ];
 }
 function resetTraining() { for (const p of G.p) { const m = p.meter; p.reset(); p.setState('idle'); p.meter = m; } G.projs = []; G.adv = null; G.cam = STAGE_W / 2; G.freeze = 0; G.flashOwner = null; G.slow = 0; }
 
 function pauseItems() {
+  if (UI.pauseSub === 'train') return trainingOptionItems();
   const items = [['Resume', () => { UI.paused = false; }]];
-  if (TR.on) {
+  if (TR.on && G.mode === 'training') {
     items.push(['Watch demo', () => { demoStart(); UI.paused = false; }]);
     items.push(['Next trial', () => { trialStart(TR.cid, TR.idx + 1); UI.paused = false; }]);
     items.push(['Previous trial', () => { trialStart(TR.cid, TR.idx - 1); UI.paused = false; }]);
     items.push(['Reset positions', () => { trialReset(); UI.paused = false; }]);
     items.push([`Input display: ${TOOLS.inputs ? 'on' : 'off'}`, () => { TOOLS.inputs = !TOOLS.inputs; }]);
     items.push(['Trial list', () => { recStop(); TR.on = false; UI.screen = 'trials'; TM.idx = TR.idx; UI.paused = false; }]);
-  } else if (TUT.on) { tutPauseItems(items); return items.concat(pauseCommon()); }
+  } else if (TUT.on && G.mode === 'training') { tutPauseItems(items); return items.concat(pauseCommon()); }
   else if (G.mode === 'training') {
     items.push([`Dummy: ${G.training.dummy}`, () => cycle('dummy')]);
     items.push([`Dummy guard: ${G.training.block}`, () => cycle('block')]);
+    items.push(['Training options ›', () => { UI.pauseSub = 'train'; UI.pauseIdx = 1; }]);
     items.push([`Hitboxes: ${G.showBoxes ? 'on' : 'off'}`, () => { G.showBoxes = !G.showBoxes; }]);
     items.push(['Reset positions', () => { resetTraining(); UI.paused = false; }]);
     items.push([`Input display: ${TOOLS.inputs ? 'on' : 'off'}`, () => { TOOLS.inputs = !TOOLS.inputs; }]);
@@ -533,6 +581,7 @@ function pauseItems() {
     items.push([TOOLS.recState === 'playing' ? 'Stop playback' : 'Play recording', () => { playToggle(); UI.paused = false; }]);
   } else items.push([`Hitboxes: ${G.showBoxes ? 'on' : 'off'}`, () => { G.showBoxes = !G.showBoxes; }]);
   items.push(...pauseCommon());
+  if (Net.practice) { items.push(['Back to my room', () => { netPracticeEnd(); UI.screen = 'online'; showNetPanel(); }]); return items; }
   if (!ARC.on) items.push(['Character select', () => { recStop(); UI.screen = 'select'; UI.selDone = [false, false]; UI.paused = false; }]);
   else items.push(['Give up this run', () => { recStop(); arcQuit(); UI.paused = false; }]);
   items.push(['Main menu', () => { recStop(); ARC.on = false; UI.screen = 'mode'; UI.paused = false; }]);
@@ -554,7 +603,7 @@ function pauseMenu(me, esc, enter, conf, back) {
   if (me[0].u || me[1].u) { UI.pauseIdx = (UI.pauseIdx + items.length - 1) % items.length; Sfx.play('menu'); }
   if (me[0].d || me[1].d) { UI.pauseIdx = (UI.pauseIdx + 1) % items.length; Sfx.play('menu'); }
   if (conf(0) || conf(1) || enter) { items[UI.pauseIdx][1](); Sfx.play('ok'); }
-  if (esc || back(0)) { UI.paused = false; Sfx.play('back'); }
+  if (esc || back(0)) { if (UI.pauseSub) { UI.pauseSub = null; UI.pauseIdx = 0; } else UI.paused = false; Sfx.play('back'); }
 }
 
 // ------------------------------------------------------------------ menu drawing
@@ -678,10 +727,54 @@ function fit() {
 }
 if (window.matchMedia) try { matchMedia('(resolution: 1dppx)').addEventListener('change', fit); } catch (e) { }
 addEventListener('resize', fit);
-const fontsReady = document.fonts ? Promise.all(['600 16px "Barlow Condensed"', 'italic 800 16px "Barlow Condensed"', 'italic 900 16px "Barlow Condensed"', '16px "Dela Gothic One"']
-  .map(f => document.fonts.load(f).catch(() => null))) : Promise.resolve();
-Music.load();
-fontsReady.then(() => loadAssets()).then(() => { ledCache.clear(); initNetPanel(); initAcctPanel(); initFriendPanel(); acctInit(); fit(); Music.prewarm(); requestAnimationFrame(loop); });
+// ------------------------------------------------------------------ boot screen
+// A loading bar while the sprites are prepared, and a readable error (instead of a blank black box) if anything fails.
+const BOOT = { frac: 0, msg: 'Loading', err: null, done: false, t0: performance.now(), last: performance.now() };
+function drawBoot() {
+  if (BOOT.done) return;
+  fit(); ctx.setTransform(RES, 0, 0, RES, 0, 0);
+  ctx.fillStyle = '#1b1030'; ctx.fillRect(0, 0, W, HGT);
+  const F = (sz, w = 800) => `italic ${w} ${sz}px "Barlow Condensed", "Arial Narrow", system-ui, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff'; ctx.font = F(54, 900); ctx.fillText('UMA VERSUS', W / 2, HGT / 2 - 70);
+  if (!BOOT.err) {
+    const bw = 420, bx = (W - bw) / 2, by = HGT / 2 - 6;
+    ctx.fillStyle = 'rgba(255,255,255,.15)'; ctx.fillRect(bx, by, bw, 14);
+    ctx.fillStyle = '#f6c343'; ctx.fillRect(bx, by, bw * BOOT.frac, 14);
+    ctx.fillStyle = '#e3d8f5'; ctx.font = F(20, 600); ctx.fillText(BOOT.msg + '…', W / 2, by + 40);
+    if (performance.now() - BOOT.last > 20000) {   // stuck on one step for a long time
+      ctx.fillStyle = '#f6c343'; ctx.font = F(17, 600);
+      ctx.fillText('This is taking longer than usual. If it stays stuck: refresh with Ctrl+Shift+R,', W / 2, by + 80);
+      ctx.fillText('close other tabs, or try a private window with extensions turned off.', W / 2, by + 102);
+    }
+    requestAnimationFrame(drawBoot);
+    return;
+  }
+  ctx.fillStyle = '#ff8a9a'; ctx.font = F(28, 900); ctx.fillText("The game couldn't start", W / 2, HGT / 2 - 18);
+  ctx.fillStyle = '#fff'; ctx.font = F(18, 600);
+  const e = String(BOOT.err).slice(0, 110); ctx.fillText(e, W / 2, HGT / 2 + 16);
+  ctx.fillStyle = '#e3d8f5'; ctx.font = F(17, 600);
+  ['Try: refresh with Ctrl+Shift+R (Cmd+Shift+R on Mac) · close other tabs · a private window with extensions off',
+   '· Chrome or Edge with graphics acceleration on. Still stuck? Send a screenshot of this screen to the Discord.',
+   'Click or press any key to reload.'].forEach((l, i) => ctx.fillText(l, W / 2, HGT / 2 + 60 + i * 24));
+}
+function bootFail(e) {
+  if (BOOT.done || BOOT.err) return;
+  BOOT.err = (e && (e.message || e.reason && e.reason.message || e.reason)) || String(e) || 'Unknown error';
+  console.error('Boot failed:', e); drawBoot();
+  const reload = () => location.reload(); addEventListener('keydown', reload, { once: true }); cv.addEventListener('click', reload, { once: true });
+}
+const bootErr = e => bootFail(e.error || e.message || e);
+addEventListener('error', bootErr); addEventListener('unhandledrejection', bootErr);
+requestAnimationFrame(drawBoot);
+const fontsReady = document.fonts ? Promise.race([Promise.all(['600 16px "Barlow Condensed"', 'italic 800 16px "Barlow Condensed"', 'italic 900 16px "Barlow Condensed"', '16px "Dela Gothic One"']
+  .map(f => document.fonts.load(f).catch(() => null))), new Promise(r => setTimeout(r, 8000))]) : Promise.resolve();   // never wait forever on fonts
+try { Music.load(); } catch (e) { console.warn('Music unavailable:', e); }
+BOOT.msg = 'Loading fonts';
+fontsReady.then(() => loadAssets((f, m) => { BOOT.frac = f; BOOT.msg = m; BOOT.last = performance.now(); }))
+  .then(() => { ledCache.clear(); initNetPanel(); initAcctPanel(); initFriendPanel(); acctInit(); fit(); Music.prewarm(); })
+  .then(() => { BOOT.done = true; removeEventListener('error', bootErr); removeEventListener('unhandledrejection', bootErr); requestAnimationFrame(loop); })
+  .catch(bootFail);
 
 // ------------------------------------------------------------------ fullscreen
 function toggleFullscreen() {

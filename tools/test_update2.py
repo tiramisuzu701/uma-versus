@@ -19,7 +19,7 @@ JS = r"""() => {
   { const [a, b] = setup('jp', 'spe', 90); startMove(a, '4S', true); run(60); R('JP Wild Catch vs grounded', b.hp < b.c.hp ? 'GRABBED (bad)' : 'whiffed (good)'); }
   { const [a, b] = setup('jp', 'spe', 260); startMove(a, '5S', true); run(70); R('JP Jungle Rush from 260', b.hp < b.c.hp ? 'GRABBED ' + (b.c.hp - b.hp) : 'missed'); }
   { const [a, b] = setup('jp', 'spe', 80); b.meter = 60; startMove(a, '6S', true); let broke = false;
-    run(70, null, f => { if (b.state === 'thrown' && b.t >= 3 && b.t <= 5) return { ...N(), S: 1, H: 1 }; if (b.state === 'tech') broke = true; return N(); });
+    run(70, null, f => { if (b.state === 'thrown' && b.t >= 3 && b.t <= 5) return { ...N(), C: 1 }; if (b.state === 'tech') broke = true; return N(); });
     R('Counter Spurt breaks Pocket Buster', broke && b.hp === b.c.hp ? `BROKE, Spurt ${Math.round(b.meter)} (60 - 50)` : `failed (hp ${b.hp}, meter ${b.meter})`); }
   { const [a, b] = setup('jp', 'spe', 80); b.meter = 30; startMove(a, '6S', true);
     run(70, null, f => b.state === 'thrown' && b.t >= 3 && b.t <= 5 ? { ...N(), S: 1, H: 1 } : N());

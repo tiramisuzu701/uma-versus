@@ -13,8 +13,8 @@ const MAX_RB = 10;        // max frames we run ahead of confirmed remote input
 const CS_EVERY = 30;
 
 // ------------------------------------------------------------------ input bytes
-const encIn = i => (i.u ? 1 : 0) | (i.d ? 2 : 0) | (i.l ? 4 : 0) | (i.r ? 8 : 0) | (i.L ? 16 : 0) | (i.M ? 32 : 0) | (i.H ? 64 : 0) | (i.S ? 128 : 0);
-const decIn = n => ({ u: n & 1, d: (n >> 1) & 1, l: (n >> 2) & 1, r: (n >> 3) & 1, L: (n >> 4) & 1, M: (n >> 5) & 1, H: (n >> 6) & 1, S: (n >> 7) & 1 });
+const encIn = i => (i.u ? 1 : 0) | (i.d ? 2 : 0) | (i.l ? 4 : 0) | (i.r ? 8 : 0) | (i.L ? 16 : 0) | (i.M ? 32 : 0) | (i.H ? 64 : 0) | (i.S ? 128 : 0) | (i.C ? 256 : 0);
+const decIn = n => ({ u: n & 1, d: (n >> 1) & 1, l: (n >> 2) & 1, r: (n >> 3) & 1, L: (n >> 4) & 1, M: (n >> 5) & 1, H: (n >> 6) & 1, S: (n >> 7) & 1, C: (n >> 8) & 1 });
 
 // ------------------------------------------------------------------ snapshots
 const P_SKIP = new Set(['c', 'ai', 'trail', 'dispHp', 'redHp']);
@@ -75,7 +75,7 @@ const Net = {
   matchId: 0, F: 0, local: [], remote: [], pred: [], snaps: [], rb: null, remoteMax: -1, ack: -1, remoteF: 0,
   rbFrames: 0, rbMax: 0, stalls: 0, waiting: false, csMine: {}, csTheirs: {}, csNext: 0, desync: -1, menu: false, rbSum: 0, rbN: 0,
   // room browser + spectators (host side): specs are extra connections that only receive confirmed inputs
-  listed: true, spectate: true, specs: [], secret: '', listT: 0, rooms: [], roomsAt: 0, statsOn: false,
+  listed: true, spectate: true, region: '', regionRpc: undefined, specs: [], secret: '', listT: 0, rooms: [], roomsAt: 0, statsOn: false,
   // test-only fake network conditions (?lag=80&jitter=20&loss=0.05)
   sim: (() => { const q = new URLSearchParams(location.search); return { lag: +q.get('lag') || 0, jitter: +q.get('jitter') || 0, loss: +q.get('loss') || 0 }; })(),
 };
@@ -92,7 +92,16 @@ function netSend(obj) {
   if (S.lag || S.jitter) setTimeout(go, S.lag + Math.random() * S.jitter); else go();
 }
 
+function netBye() { for (let i = 0; i < 3; i++) netSend({ t: 'bye' }); }   // the match channel doesn't resend, so say it three times
 function setStatus(s) { Net.status = s; const el = document.getElementById('netStatus'); if (el) el.textContent = s; }
+// STUN servers find each player's public address; the PeerJS TURN relays are the fallback when a direct
+// connection can't be made (strict NATs, some school/work networks). More STUN servers = fewer failed joins.
+const ICE = { iceServers: [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302'] },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' }],
+  sdpSemantics: 'unified-plan' };
+const PEER_OPTS = { debug: 1, config: ICE };
 function randCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 5; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
 
 // ------------------------------------------------------------------ connecting
@@ -102,27 +111,38 @@ function netHost(local) {
   if (local) {
     Net.transport = 'bc'; Net.bc = new BroadcastChannel('umavs-local');
     Net.bc.onmessage = e => { if (e.data.from !== Net.role) netRecv(e.data); };
-    Net.code = 'LOCAL'; setStatus('Hosting on this computer. In another tab, tick Same computer and press Join.');
+    Net.code = 'LOCAL'; setStatus('Hosting on this computer. In another tab, tick Same computer and press Join.'); { const pr = document.getElementById('netPracticeRow'); if (pr) pr.classList.remove('hidden'); }
     return;
   }
   if (typeof Peer === 'undefined') { setStatus('PeerJS failed to load.'); return; }
   Net.transport = 'peer';
+  // The public signalling server is sometimes slow to answer. If it hasn't opened the room in 8 s, try again with a
+  // new code (up to 3 times) rather than sitting on "Creating room…"; a lost signalling connection is reopened too.
+  let tries = 0;
   const tryOpen = () => {
+    if (++tries > 4) { setStatus('Couldn\'t reach the online service. Check your connection and press Host again.'); netLog('host failed', { tries: tries - 1 }); return; }
     Net.code = randCode();
-    setStatus('Creating room…');
-    const peer = new Peer(NET_PREFIX + Net.code, { debug: 1 });
+    setStatus(tries > 1 ? `Creating room… (try ${tries} of 4)` : 'Creating room…');
+    const peer = new Peer(NET_PREFIX + Net.code, PEER_OPTS);
     Net.peer = peer;
-    peer.on('open', () => { setStatus(`Room code: ${Net.code}. Send it to your friend${Net.listed ? ', or they can find it in the room list' : ''}.`); showCode(Net.code); roomBeat(true); });
+    const slow = setTimeout(() => { if (Net.peer === peer && !peer.open && !Net.connected) { netLog('host slow', { tries }); Net.peer = null; peer.destroy(); tryOpen(); } }, 8000);
+    peer.on('open', () => { clearTimeout(slow); setStatus(hostReadyText()); showCode(Net.code); roomBeat(true); });
     peer.on('connection', conn => {
       if (conn.metadata && conn.metadata.watch) { if (!Net.spectate || Net.specs.length >= 4) { conn.on('open', () => conn.close()); return; } bindSpec(conn); return; }
-      if (Net.conn) { conn.close(); return; }
+      if (Net.conn && (Net.connected || Net.conn.open)) { conn.close(); return; }   // room's full
+      if (Net.conn) { const old = Net.conn; Net.conn = null; try { old.close(); } catch (e) { } }   // a guest retrying a join that never opened
       bindConn(conn);
     });
     peer.on('error', e => {
-      if (e.type === 'unavailable-id') { peer.destroy(); tryOpen(); }
-      else setStatus('Network error: ' + (e.type || e.message || e));
+      if (Net.peer !== peer) return;
+      if (e.type === 'unavailable-id') { clearTimeout(slow); Net.peer = null; peer.destroy(); tryOpen(); }
+      else { setStatus('Network error: ' + (e.type || e.message || e)); netLog('host error', { type: e.type || String(e) }); }
     });
-    peer.on('disconnected', () => { if (!Net.connected) setStatus('Lost the signalling server. Try hosting again.'); });
+    peer.on('disconnected', () => {   // the room still works for a joined friend; reopen it so new joins and the listing keep working
+      if (Net.peer !== peer || peer.destroyed) return;
+      netLog('signalling lost', { connected: Net.connected });
+      try { peer.reconnect(); } catch (e) { if (!Net.connected) setStatus('Lost the signalling server. Try hosting again.'); }
+    });
   };
   tryOpen();
 }
@@ -142,25 +162,47 @@ function netJoin(code, local) {
   if (code.length < 4) { setStatus('Enter the room code your friend gave you.'); return; }
   Net.transport = 'peer'; Net.code = code;
   setStatus('Connecting…');
-  const peer = new Peer(undefined, { debug: 1 });
+  const peer = new Peer(undefined, PEER_OPTS);
   Net.peer = peer;
-  peer.on('open', () => {
+  // The first offer sometimes gets lost on the way through the signalling server; if the connection hasn't opened
+  // after 6 s, ask again (twice) before telling the player it's stuck.
+  let attempt = 0;
+  const dial = () => {
+    if (Net.peer !== peer || Net.connected) return;
+    attempt++;
+    if (Net.conn) { const old = Net.conn; Net.conn = null; try { old.close(); } catch (e) { } }
     const conn = peer.connect(NET_PREFIX + code, { reliable: false, serialization: 'json' });
     bindConn(conn);
-    setTimeout(() => { if (!Net.connected && Net.peer === peer) setStatus('Still connecting. Check the code. Some school and work networks block this.'); }, 8000);
-  });
+    if (attempt > 1) { setStatus(`Connecting… (try ${attempt} of 3)`); netLog('join retry', { attempt }); }
+    setTimeout(() => {
+      if (Net.connected || Net.peer !== peer) return;
+      if (attempt < 3) dial(); else setStatus('Still connecting. Check the code. Some school and work networks block this.');
+    }, 6000);
+  };
+  peer.on('open', dial);
   peer.on('error', e => setStatus(e.type === 'peer-unavailable' ? `No room called ${code}.` : 'Network error: ' + (e.type || e.message || e)));
 }
 function bindConn(conn) {
-  Net.conn = conn;
-  conn.on('open', () => onConnected());
-  conn.on('data', d => netRecv(d));
-  conn.on('close', () => onDisconnected('Opponent disconnected.'));
-  conn.on('error', e => onDisconnected('Connection error.'));
+  Net.conn = conn;   // events from a connection that has been replaced (a retried join) are ignored
+  conn.on('open', () => { if (Net.conn === conn) onConnected(); });
+  conn.on('data', d => { if (Net.conn === conn) netRecv(d); });
+  conn.on('close', () => { if (Net.conn === conn) onDisconnected('Opponent disconnected.'); });
+  conn.on('error', e => { if (Net.conn === conn) onDisconnected('Connection error.'); });
 }
+// Training while your room waits for an opponent: the room stays open and listed, and the match lobby opens
+// as soon as someone joins.
+function netPractice() {
+  if (Net.role !== 'host' || Net.connected) return;
+  hideNetPanel();
+  const picks = lastPicks('training'); UI.pendingMode = 'training'; const ok = i => i >= 0 && i < ROSTER.length; UI.sel = [ok(Net.myPick) ? Net.myPick : ok(picks[0]) ? picks[0] : 0, ok(picks[1]) ? picks[1] : 1]; UI.pal = [Net.myPal || 0, 0]; UI.vsStage = Net.stage || 0;
+  beginLocalMatch(); Net.practice = true; toast('Practising · your room stays open. The match lobby opens when someone joins.');
+}
+function netPracticeEnd() { if (!Net.practice) return; Net.practice = false; UI.paused = false; UI.pauseSub = null; recStop(); }
 function onConnected() {
   if (Net.connected) return;
+  if (Net.practice) { netPracticeEnd(); toast('Someone joined your room!'); }
   Net.connected = true; Net.lastRecv = performance.now();
+  netLog('connected', { role: Net.role, via: Net.transport, build: BUILD });
   Net.myReady = false; Net.theirReady = false; Net.start = null; Net.matchId = 0; Net.theirBuild = ''; Net.theirWho = null;
   Net.sessKey = Date.now().toString(36) + Math.floor(Math.random() * 1e9).toString(36);   // names this pairing's matches in the history
   netSend({ t: 'who', who: acctWho() });
@@ -171,6 +213,7 @@ function onConnected() {
 }
 function onDisconnected(msg) {
   if (!Net.connected && !Net.conn) return;
+  netLog('disconnected', { why: msg, ...netStats() });
   netClose(false);
   if (['netselect', 'game', 'spectate'].includes(UI.screen) && (UI.screen !== 'game' || G.mode === 'online')) {
     UI.screen = 'online'; showNetPanel();
@@ -178,11 +221,12 @@ function onDisconnected(msg) {
   setStatus(msg);
 }
 function netClose(silent) {
+  Net.practice = false; { const pr = document.getElementById('netPracticeRow'); if (pr) pr.classList.add('hidden'); }
   if (Net.role === 'host' && Net.code && Net.code !== 'LOCAL') roomClose();
   for (const c of Net.specs) { try { c.close(); } catch (e) { } } Net.specs = [];
   Net.connected = false;
   try { Net.conn && Net.conn.close(); } catch (e) { }
-  try { Net.peer && Net.peer.destroy(); } catch (e) { }
+  { const pr = Net.peer; Net.peer = null; try { pr && pr.destroy(); } catch (e) { } }   // cleared first so its 'disconnected' event doesn't reconnect it
   try { Net.bc && Net.bc.close(); } catch (e) { }
   clearInterval(Net.helloTimer);
   Net.conn = null; Net.peer = null; Net.bc = null; Net.inbox = [];
@@ -190,7 +234,31 @@ function netClose(silent) {
 }
 
 // ------------------------------------------------------------------ receiving
-function netRecv(m) { Net.inbox.push(m); }
+function netRecv(m) { Net.inbox.push(m); Net.lastRecv = performance.now(); }   // arrival counts as alive even while the tab can't process it
+
+// ------------------------------------------------------------------ connection log (for players reporting kicks)
+// The last 40 connection events, kept in this browser. "Copy connection log" in the Online panel puts it on the clipboard.
+const NETLOG_KEY = 'umavs.netlog';
+function netLog(ev, detail) {
+  try {
+    const log = JSON.parse(localStorage.getItem(NETLOG_KEY) || '[]');
+    log.push({ at: new Date().toISOString(), ev, ...(detail || {}) });
+    localStorage.setItem(NETLOG_KEY, JSON.stringify(log.slice(-40)));
+  } catch (e) { }
+}
+function netStats() {
+  return { role: Net.role, via: Net.transport, build: BUILD, ping: Math.round(Net.ping || 0), frame: Net.F || 0, rbMax: Net.rbMax || 0, stalls: Net.stalls || 0,
+    hidden: document.hidden, screen: UI.screen, sinceRecv: Net.lastRecv ? Math.round(performance.now() - Net.lastRecv) : null };
+}
+function netLogText() {
+  let log = []; try { log = JSON.parse(localStorage.getItem(NETLOG_KEY) || '[]'); } catch (e) { }
+  const head = `Uma Versus ${typeof VERSION !== 'undefined' ? VERSION : ''} build ${BUILD} · ${navigator.userAgent}`;
+  return [head, ...log.map(e => { const { at, ev, ...d } = e; return `${at} ${ev} ${Object.entries(d).map(([k, v]) => k + '=' + v).join(' ')}`; })].join('\n');
+}
+// A hidden tab stops drawing frames, which used to stop the connection's heartbeat too, so the other player got
+// "Connection timed out" after 6 s. Keep a heartbeat going from a timer (browsers still run those about once a second).
+setInterval(() => { if (Net.connected && document.hidden && Net.role !== 'spec') { try { netSend({ t: 'ping', ts: performance.now() }); } catch (e) { } } }, 1000);
+addEventListener('visibilitychange', () => { if (Net.connected) netLog(document.hidden ? 'tab hidden' : 'tab visible', netStats()); });
 function netPump() {
   const now = performance.now();
   if (Net.role === 'host' && Net.peer && Net.code !== 'LOCAL' && ++Net.listT % 900 === 0) roomBeat(false);   // keep the listing alive every 15s
@@ -224,7 +292,7 @@ function netPump() {
 // battle theme: P1 (host) picks; it follows P1's runner until it is changed by hand
 function netMusic() { return Net.music || ROSTER[Net.side === 0 ? Net.myPick : Net.theirPick] || 'spe'; }
 function netSelectTick(e, enter, esc) {
-  if (esc) { netSend({ t: 'bye' }); netClose(false); UI.screen = 'online'; showNetPanel(); setStatus('Left the room.'); return; }
+  if (esc) { netBye(); netClose(false); UI.screen = 'online'; showNetPanel(); setStatus('Left the room.'); return; }
   const mismatch = Net.theirBuild && Net.theirBuild !== BUILD;
   if (mismatch) Net.myReady = false;
   // the host (P1) has three rows: runner, course, battle music
@@ -247,6 +315,7 @@ function netSelectTick(e, enter, esc) {
   }
 }
 function startNetMatch(st) {
+  netLog('match start', { m: st.m, delay: st.delay, ping: Math.round(Net.ping || 0) });
   Object.assign(Net, {
     matchId: st.m, delay: st.delay, F: 0, local: [], remote: [], pred: [], snaps: [], rb: null,
     remoteMax: st.delay - 1, ack: st.delay - 1, remoteF: 0, rbFrames: 0, rbMax: 0, stalls: 0,
@@ -254,6 +323,7 @@ function startNetMatch(st) {
     matchKey: typeof st.key === 'string' ? st.key.slice(0, 64) : 'm' + st.m + '-' + Date.now(),
   });
   for (let f = 0; f < st.delay; f++) { Net.local[f] = 0; Net.remote[f] = 0; }
+  leaveSideModes('online');
   startMatch('online', st.c[0], st.c[1], Array.isArray(st.pal) ? st.pal.map(v => (v | 0) % PALETTE_COUNT) : null);
   if (Net.role === 'host') for (const c of Net.specs) specStart(c, st);
   G.stage = st.stage || 0; G.music = st.music || st.c[0];
@@ -304,7 +374,7 @@ function netGameTick(localRaw) {
       }
       G.resim = false;
       N.rbFrames = N.F - from; N.rbMax = Math.max(N.rbMax, N.rbFrames); N.rbSum += N.rbFrames; N.rbN++;
-    } else { N.desync = from; }
+    } else { if (N.desync < 0) netLog('desync', { at: from, ...netStats() }); N.desync = from; }
   } else N.rbFrames = 0;
 
   // 2) checksums for newly-confirmed frames
@@ -312,7 +382,7 @@ function netGameTick(localRaw) {
     const f = N.csNext;
     if (f % CS_EVERY === 0 && N.csMine[f] !== undefined) {
       netSend({ t: 'cs', m: N.matchId, f, h: N.csMine[f] });
-      if (N.csTheirs[f] !== undefined && N.csTheirs[f] !== N.csMine[f]) N.desync = f;
+      if (N.csTheirs[f] !== undefined && N.csTheirs[f] !== N.csMine[f]) { if (N.desync < 0) netLog('desync', { at: f, ...netStats() }); N.desync = f; }
     }
     if ((f - RING) % CS_EVERY !== 0) delete N.csMine[f - RING];
   }
@@ -367,7 +437,7 @@ function netWatch(code) {
   Net.role = 'spec'; Net.side = 0; Net.transport = 'peer'; Net.code = code;
   Object.assign(SPEC, { m: 0, frames: [], idx: 0, live: false, buildOk: true });
   setStatus('Connecting to watch…');
-  const peer = new Peer(undefined, { debug: 1 }); Net.peer = peer;
+  const peer = new Peer(undefined, PEER_OPTS); Net.peer = peer;
   peer.on('open', () => {
     const conn = peer.connect(NET_PREFIX + code, { reliable: true, serialization: 'json', metadata: { watch: true } });
     Net.conn = conn;
@@ -387,6 +457,7 @@ function specPump(now) {
     if (m.t === 'sstart' && m.st) {
       const st = m.st; if (m.names) SPEC.names = m.names.map(n => String(n).slice(0, 16));
       Object.assign(SPEC, { m: st.m, frames: [], idx: 0, live: true });
+      leaveSideModes('spectate');
       startMatch('spectate', st.c[0], st.c[1], Array.isArray(st.pal) ? st.pal : null);
       G.stage = st.stage || 0; G.music = st.music || st.c[0];
     }
@@ -404,18 +475,29 @@ function specTick(esc) {
 }
 
 // ------------------------------------------------------------------ room browser (Supabase)
+// Regions: the host picks one each time they host (no guessing); the room list shows it and puts rooms from your
+// last picked region first.
+const REGIONS = { nae: 'NA East', naw: 'NA West', sa: 'South America', eu: 'Europe', me: 'Middle East', as: 'Asia', oc: 'Oceania', af: 'Africa' };
+const REGION_KEY = 'umavs.region';
+function myRegion() { try { const r = localStorage.getItem(REGION_KEY) || ''; return REGIONS[r] ? r : ''; } catch (e) { return ''; } }
 function roomSecret() { if (!Net.secret) { const a = new Uint8Array(16); crypto.getRandomValues(a); Net.secret = [...a].map(v => v.toString(16).padStart(2, '0')).join(''); } return Net.secret; }
 function roomBeat(first) {
   if (!ACCT.client || Net.role !== 'host' || !Net.code || Net.code === 'LOCAL') return;
   if (!Net.listed) { if (!first) roomClose(); return; }
-  ACCT.client.rpc('room_open', { p_code: Net.code, p_name: acctName() || 'Guest', p_build: BUILD, p_spectate: Net.spectate,
-    p_status: Net.connected ? 'playing' : 'open', p_watchers: Net.specs.length, p_secret: roomSecret() }).then(() => { }, () => { });
+  const args = { p_code: Net.code, p_name: acctName() || 'Guest', p_build: BUILD, p_spectate: Net.spectate,
+    p_status: Net.connected ? 'playing' : 'open', p_watchers: Net.specs.length, p_secret: roomSecret() };
+  // the region version of room_open needs migration 006; until it's run, fall back to the old one
+  const old = () => ACCT.client.rpc('room_open', args).then(() => { }, () => { });
+  if (Net.regionRpc === false) { old(); return; }
+  ACCT.client.rpc('room_open', { ...args, p_region: Net.region || null }).then(r => { if (r && r.error) { Net.regionRpc = false; old(); } else Net.regionRpc = true; }, () => { Net.regionRpc = false; old(); });
 }
 function roomClose() { if (ACCT.client && Net.secret && Net.code && Net.code !== 'LOCAL') ACCT.client.rpc('room_close', { p_code: Net.code, p_secret: Net.secret }).then(() => { }, () => { }); }
 async function roomsFetch() {
   if (!ACCT.client) { renderRooms(null); return; }
   try {
-    const { data, error } = await ACCT.client.from('rooms').select('code, host_name, build, spectate, status, watchers').order('last_seen', { ascending: false }).limit(20);
+    const q = cols => ACCT.client.from('rooms').select(cols).order('last_seen', { ascending: false }).limit(20);
+    let { data, error } = await q('code, host_name, build, spectate, status, watchers, region');
+    if (error) ({ data, error } = await q('code, host_name, build, spectate, status, watchers'));   // before migration 006
     if (error) throw error; Net.rooms = data || []; Net.roomsAt = Date.now(); renderRooms(Net.rooms);
   } catch (e) { renderRooms(null, "Couldn't load the room list."); }
 }
@@ -423,12 +505,14 @@ function renderRooms(list, err) {
   const el = document.getElementById('netRooms'); if (!el) return;
   if (!list) { el.innerHTML = `<div class="empty">${err || 'The room list needs the online service, which isn\'t available in this copy.'}</div>`; return; }
   const mine = Net.role === 'host' ? Net.code : '';
-  const rows = list.filter(r => r.code !== mine);
+  const me = myRegion(), rows = list.filter(r => r.code !== mine);
+  if (me) rows.sort((a, b) => (b.region === me) - (a.region === me));   // stable: same-region rooms first, newest first within each
   if (!rows.length) { el.innerHTML = '<div class="empty">No open rooms right now. Host one and it shows up here.</div>'; return; }
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   el.innerHTML = rows.map(r => {
     const same = r.build === BUILD, open = r.status === 'open';
-    return `<div class="room"><span class="rc">${esc(r.code)}</span><span class="rn">${esc(r.host_name)}${same ? '' : ' <em>other version</em>'}</span>` +
+    const rg = REGIONS[r.region] ? `<span class="rg${r.region === me ? ' mine' : ''}">${REGIONS[r.region]}</span>` : '<span class="rg none">Region ?</span>';
+    return `<div class="room"><span class="rc">${esc(r.code)}</span><span class="rn">${esc(r.host_name)}${same ? '' : ' <em>other version</em>'}</span>${rg}` +
       `<span class="rs">${open ? 'waiting' : 'in a match'}${r.watchers ? ' · ' + r.watchers + ' watching' : ''}</span>` +
       (open && same ? `<button data-join="${esc(r.code)}">Join</button>` : '') + (r.spectate && same ? `<button class="ghost" data-watch="${esc(r.code)}">Watch</button>` : '') + '</div>';
   }).join('');
@@ -444,11 +528,17 @@ function onChecksum(m) {
 function netMatchConfirmedOver() { return Net.phaseAt[Math.min(Net.remoteMax, Net.F - 1)] === 'match'; }
 
 // ------------------------------------------------------------------ DOM lobby panel
-function showNetPanel() { document.getElementById('net').classList.remove('hidden'); roomsFetch(); }
+function showNetPanel() {
+  const el = document.getElementById('net'), reopened = el.classList.contains('hidden') && Net.role !== 'host';
+  if (reopened) { Net.region = ''; const s = document.getElementById('netRegion'); if (s) s.value = ''; }   // the host picks a region each time
+  el.classList.remove('hidden'); roomsFetch();
+}
+function hostReadyText() { return `Room code: ${Net.code}. Send it to your friend${Net.listed ? ', or they can find it in the room list' : ''}.` + (Net.region ? '' : ' Pick your region so people nearby can find you.'); }
 function hideNetPanel() { document.getElementById('net').classList.add('hidden'); }
 function showCode(code) {
   const el = document.getElementById('netCode');
   el.textContent = code; el.parentElement.classList.toggle('hidden', !code);
+  document.getElementById('netPracticeRow').classList.toggle('hidden', !code || Net.role !== 'host');
 }
 function initNetPanel() {
   const $ = id => document.getElementById(id);
@@ -461,10 +551,14 @@ function initNetPanel() {
   $('netBack').onclick = () => { netClose(false); hideNetPanel(); UI.screen = 'mode'; setStatus(''); };
   $('netDelay').onchange = e => { Net.delay = +e.target.value; };
   $('netListed').onchange = e => { Net.listed = e.target.checked; roomBeat(false); };
+  $('netRegion').onchange = e => { Net.region = REGIONS[e.target.value] ? e.target.value : ''; if (Net.region) { try { localStorage.setItem(REGION_KEY, Net.region); } catch (er) { } }
+    roomBeat(false); if (Net.rooms) renderRooms(Net.rooms); if (Net.role === 'host' && Net.peer && Net.peer.open) setStatus(hostReadyText()); };
   $('netSpectate').onchange = e => { Net.spectate = e.target.checked; roomBeat(false); };
   $('netRefresh').onclick = () => roomsFetch();
   $('netFriends').onclick = () => { hideNetPanel(); friendsOpen('online'); };
   $('netLeaders').onclick = () => { hideNetPanel(); leadersOpen('online'); };
+  $('netPractice').onclick = () => { Sfx.unlock(); netPractice(); };
+  $('netLog').onclick = () => { try { navigator.clipboard.writeText(netLogText()); $('netLog').textContent = 'Copied!'; setTimeout(() => $('netLog').textContent = 'Copy connection log', 1500); } catch (e) { } };
 }
 
 // ------------------------------------------------------------------ drawing
@@ -474,8 +568,8 @@ const NP = { i: 0, pos: 0 };
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 function netPanelItems() { return [...document.querySelectorAll('#net button, #net select, #net input')].filter(el => el.offsetParent !== null); }
 function netPanelPad(e) {
+  const any = Object.values(e).some(Boolean); if (!any) return;   // check input first: listing the panel's controls forces a layout
   const items = netPanelItems(); if (!items.length) return;
-  const any = Object.values(e).some(Boolean); if (!any) return;
   NP.i = Math.min(NP.i, items.length - 1);
   const el = items[NP.i];
   if (e.u || e.d) {
@@ -487,6 +581,7 @@ function netPanelPad(e) {
   }
   if (e.l || e.r) {
     if (el.id === 'netCodeIn') NP.pos = Math.max(0, Math.min(4, NP.pos + (e.r ? 1 : -1)));
+    else if (el.tagName === 'SELECT') { el.selectedIndex = Math.max(0, Math.min(el.options.length - 1, el.selectedIndex + (e.r ? 1 : -1))); el.dispatchEvent(new Event('change')); }
     else if (el.id === 'netDelay') el.selectedIndex = Math.max(0, Math.min(el.options.length - 1, el.selectedIndex + (e.r ? 1 : -1)));
     else NP.i = (NP.i + (e.r ? 1 : items.length - 1)) % items.length;
     Sfx.play('menu');

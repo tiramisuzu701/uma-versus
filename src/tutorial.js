@@ -42,7 +42,7 @@ const LESSONS = [
   ] },
   { title: 'SPURT', steps: [
     { text: 'Super: S + H with a full Spurt gauge. Land it on her', need: 1, test: e => e.superHit },
-    { text: 'Counter Spurt: while blocking her string, press S + H', need: 1, dummy: 'string', test: e => e.move === 'GC' },
+    { text: 'Counter Spurt: while blocking her string, press Counter Spurt (V or LT by default)', need: 1, dummy: 'string', test: e => e.move === 'GC' },
   ] },
 ];
 const TUT = { on: false, li: 0, si: 0, n: 0, seen: [], done: false, doneT: 0, prev: null, dm: { cd: 0, q: [] }, all: false };

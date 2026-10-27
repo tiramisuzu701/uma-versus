@@ -165,7 +165,7 @@ function drawFriends() {
 }
 
 // ---------------------------------------------------------------- leaderboards
-// counts only online matches both players recorded (see supabase/003)
+// online matches both players recorded, plus matches against Guests (see supabase/005)
 const LB = { rows: null, tab: 0, idx: 0, status: '', back: 'mode' };
 const LB_TABS = [['MOST WINS', 'wins'], ['WIN RATE', 'win_rate'], ['MOST MATCHES', 'games']];
 function leadersOpen(back) {
@@ -189,7 +189,7 @@ function leadersTick(e, enter, esc) {
 }
 function drawLeaders() {
   menuBg(0.82);
-  topBar('LEADERBOARDS', 'online matches both players recorded');
+  topBar('LEADERBOARDS', 'online matches, rematches and Guest matches included');
   LB_TABS.forEach(([t], k) => { const s = k === LB.tab; slant(250 + k * 160, 52, 150, 30, 8, s ? PAL.gold : 'rgba(255,255,255,.08)'); label(t, 325 + k * 160, 68, 16, s ? PAL.ink : '#ddd2f0', 'center', 900, true); });
   panel(40, 92, 880, 400, PAL.gold);
   const rows = leadersSorted(), me = acctOn() ? ACCT.user.id : null, top = Math.max(0, Math.min(LB.idx - 5, rows.length - 11));

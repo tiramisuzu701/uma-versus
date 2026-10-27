@@ -106,6 +106,7 @@ function arcBegin(cid, pal) {
 }
 function arcFight() {
   const L = ARC.ladder[ARC.idx];
+  leaveSideModes('cpu', true);
   startMatch('cpu', ARC.cid, L.cid, [ARC.pal, 0]);
   if (L.boss) { G.p[1].boss = true; G.p[1].meter = 100; }
   G.stage = L.stage; G.music = L.boss ? L.cid : ARC.cid; G.cpuLevel = L.lv;

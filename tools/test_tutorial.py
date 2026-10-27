@@ -19,7 +19,7 @@ JS = r"""() => {
     [i => (i % 120 === 0 && close(), ({ 1: { L: 1 }, 8: { M: 1 }, 20: { H: 1 } })[i % 120] || {}),
      i => { if (i % 120 === 0) close(); const k = i % 120; if (k === 1) return { M: 1 }; if (k >= 9 && k < 15) return tokenInputs(G.p[0], '236M')[k - 9] || {}; return {}; },
      i => { const a = G.p[0]; if (i % 200 === 0) { close(); aiState(a); aiStartRun(a, '2H jc j.M j.H', CPU_LV[4]); } return (a.ai.run && aiRunInput(a, G.p[1], CPU_LV[4])) || {}; }],
-    [i => (i % 120 === 0 && close(), i % 120 === 2 ? { S: 1, H: 1 } : {}), i => G.p[0].state === 'block' ? { S: 1, H: 1 } : { [b()]: 1 }],
+    [i => (i % 120 === 0 && close(), i % 120 === 2 ? { S: 1, H: 1 } : {}), i => G.p[0].state === 'block' ? (i % 4 < 2 ? { C: 1 } : {}) : { [b()]: 1 }],
   ];
   for (let li = 0; li < LESSONS.length; li++) {
     tutStart(li);

@@ -40,6 +40,9 @@
   #netRooms .rn{flex:1;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #netRooms .rn em{font-style:normal;color:#ff8a9a;font-size:12px}
   #netRooms .rs{font-size:13px;color:#c3b6e0}
+  #netRooms .rg{font:700 12px 'Barlow Condensed',sans-serif;color:#e8e0f6;background:#3a2360;border-radius:3px;padding:1px 6px;white-space:nowrap}
+  #netRooms .rg.mine{background:#2fae5b;color:#fff}
+  #netRooms .rg.none{color:#8f82b0;background:transparent;border:1px solid #3a2360}
   #netRooms button{padding:4px 12px;font-size:15px}
   #net{max-height:calc(100vh - 30px);overflow:auto}
   #acct{position:fixed;left:50%;top:50%;transform:translate(-50%,-47%);width:min(440px,calc(100vw - 32px));max-height:calc(100vh - 40px);overflow:auto;
@@ -76,13 +79,27 @@
 </head>
 <body>
 <canvas id="c" width="960" height="540"></canvas>
+<script>
+// If the game's own code can't even run (very old browser, broken download), say so in plain HTML after 12 s.
+window.__bootErrs = []; addEventListener('error', e => __bootErrs.push(e.message || 'script error'));
+setTimeout(() => { if (typeof BOOT !== 'undefined') return;
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff;font:600 18px system-ui,sans-serif;text-align:center;padding:20px;background:#1b1030';
+  d.innerHTML = '<b style="font-size:26px;color:#ff8a9a">The game couldn\'t start</b><div>Your browser may be out of date, or the page didn\'t finish downloading.</div>'
+    + '<div>Try refreshing with Ctrl+Shift+R, updating your browser, or using Chrome or Edge.</div>'
+    + '<div style="color:#e3d8f5;font-size:14px;max-width:700px"></div>';
+  d.lastChild.textContent = __bootErrs.slice(0, 3).join(' · ');
+  document.body.appendChild(d); }, 12000);
+</script>
 <div id="net" class="hidden">
   <h2>ONLINE</h2>
   <p class="sub">Peer-to-peer with rollback netcode. One of you hosts, the other joins with the code.</p>
   <div class="row"><button id="netHost">Host a room</button>
     <label>Input delay <select id="netDelay"><option>0</option><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label></div>
+  <div class="row small"><label>Region <select id="netRegion"><option value="">Choose…</option><option value="nae">NA East</option><option value="naw">NA West</option><option value="sa">South America</option><option value="eu">Europe</option><option value="me">Middle East</option><option value="as">Asia</option><option value="oc">Oceania</option><option value="af">Africa</option></select></label></div>
   <div class="row small"><label><input type="checkbox" id="netListed" checked> Show my room in the list</label><label><input type="checkbox" id="netSpectate" checked> Let people watch</label></div>
   <div class="row hidden" id="netCodeBox"><span id="netCode"></span><button class="ghost" id="netCopy">Copy</button></div>
+  <div class="row hidden" id="netPracticeRow"><button id="netPractice" title="Play Training until someone joins your room">Training</button></div>
   <hr>
   <div class="row"><input id="netCodeIn" type="text" maxlength="5" placeholder="CODE" autocomplete="off"><button id="netJoin">Join</button></div>
   <div class="row"><label><input type="checkbox" id="netLocal"> Same computer (two browser tabs, for testing)</label></div>
@@ -90,7 +107,7 @@
   <hr>
   <div class="row" style="justify-content:space-between;margin-bottom:4px"><b class="sect">OPEN ROOMS</b><button class="ghost" id="netRefresh">Refresh</button></div>
   <div id="netRooms"><div class="empty">Loading…</div></div>
-  <div class="row" style="justify-content:space-between;margin-bottom:0"><span><button class="ghost" id="netFriends">Friends</button> <button class="ghost" id="netLeaders">Leaderboards</button></span><button class="ghost" id="netBack">Back</button></div>
+  <div class="row" style="justify-content:space-between;margin-bottom:0"><span><button class="ghost" id="netFriends">Friends</button> <button class="ghost" id="netLeaders">Leaderboards</button> <button class="ghost" id="netLog" title="Copies a log of recent connections, to send along with a bug report">Copy connection log</button></span><button class="ghost" id="netBack">Back</button></div>
 </div>
 <div id="acct" class="hidden">
   <h2 id="acTitle">ACCOUNT</h2>

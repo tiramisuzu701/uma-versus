@@ -4,7 +4,7 @@
 
 A fan-made 2D fighting game with the Umamusume cast. It runs in the browser, no install needed.
 
-**Update 2.0.0 · build `4932dd`**
+**Update 2.0.1 · build `9e9133`**
 
 - 12 characters, each with her own play style, and palettes for every one
 - Arcade mode with rivals, a final boss and endings, plus a tutorial
@@ -26,7 +26,7 @@ Default controls (you can change them all under *Controls*):
 | Throw (L+M) / Super (S+H) | R / Y | U / O | LB / RB |
 | Dash | set under *Controls* | | |
 
-The wiki has the full guide, frame data for every move and all the combos: https://tiramisuzu701.github.io/uma-versus/wiki/
+The wiki has the full guide, frame data for every move and all the combos: https://umaversus.lol/wiki/
 
 ## Community
 

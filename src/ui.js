@@ -1,4 +1,4 @@
-const VERSION = '2.0.0';
+const VERSION = '2.0.1';
 // Menus and HUD. The look is race day: gate colours, tote-board LED text,
 // saddlecloth name plates, rosettes for round wins.
 'use strict';
@@ -157,8 +157,7 @@ function faceOf(cid, pal, flip) {
   pal = pal || 0;
   const key = cid + '.' + pal + (flip ? 'f' : '');
   if (FACES[key]) return FACES[key];
-  const S = SPR[cid], idx = S.anims['800'][0], sx = (idx % S.cols) * 64, sy = Math.floor(idx / S.cols) * 64;
-  const src = palSheet(cid, pal, flip);
+  const S = SPR[cid], idx = S.anims['800'][0], [src, sx, sy] = palSrc(cid, pal, flip, idx);
   const tmp = canvasOf(64, 64), t = tmp.getContext('2d'); t.drawImage(src, sx, sy, 64, 64, 0, 0, 64, 64);
   let top = 0, minX = 64, maxX = 0;
   try {
@@ -338,10 +337,10 @@ function openSocial(i) {
 // ---------------------------------------------------------------- main menu ("race programme")
 const MODE_META = { arcade: '', tutorial: '', account: '', versus: '2P · SAME SCREEN', online: 'ROLLBACK', cpu: '', training: 'FREE RUN', replays: '', trials: '', moves: '', controls: 'KEYS · PADS', sound: 'VOLUME · DISPLAY' };
 const TIPS = ['Hold back to block, even straight out of a dash', 'Motion + H does the EX version of a skill for 50 Spurt',
-  'Mash L for an auto-combo: 5L › 5M › 5H › skill', 'Teio\'s skills chain into each other on hit', 'McQueen deals PUNISH! damage to anyone caught recovering',
+  'Mash L for an auto-combo: 5L › 5M › 5H › skill', 'Teio\'s skills chain into each other on hit', 'Cafe\'s Friend skills chain into each other once the Friend hits', 'McQueen deals PUNISH! damage to anyone caught recovering',
   'Vodka\'s Full Throttle is a hard knockdown: no quick rise', 'Daiwa can keep two shots on screen', 'Kitasan\'s Matsuri Uppercut is fully invincible',
-  'Gold Ship can dash-cancel her normals for 10 Spurt', 'Suzuka is the only runner with an air dash', 'L+M is a throw. Throws beat blocking',
-  'Counter Spurt: S+H while blocking, for 50 Spurt', 'Caught by a command grab? S+H right away breaks it for 50 Spurt', 'Press ` in a match to show hitboxes', 'Replays are saved automatically after every match'];
+  'Gold Ship can dash-cancel her normals for 50 Spurt', 'Suzuka is the only runner with an air dash', 'L+M is a throw. Throws beat blocking',
+  'Counter Spurt: its own button (V · ; · LT) while blocking, for 50 Spurt', 'Caught by a command grab? Counter Spurt right away breaks it for 50 Spurt', 'Mashing throw tech while stuck in a combo locks your tech out for a moment', 'A combo can use each skill twice and each normal four times; after that it whiffs (REPEAT)', 'Getting hit or thrown clears your fireballs and potions off the screen', 'After a skill done with its motion, the same skill needs a moment (1/6 s) before it can come out again', 'Press ` in a match to show hitboxes', 'Replays are saved automatically after every match'];
 function ticker(y) {
   ctx.fillStyle = 'rgba(24,11,42,.92)'; ctx.fillRect(0, y, W, 28);
   slant(-8, y, 108, 28, 10, PAL.gold); label('TRACK NEWS', 10, y + 14, 15, PAL.ink, 'left', 800, true);
@@ -651,12 +650,21 @@ function spurtGauge(p, i) {
   label(lab, flip ? mx + 2 * segW + gap : mx, my - 11, 14, full ? PAL.gold : '#fff', flip ? 'right' : 'left', 900, true);
   // shortcut cooldown chips
   ['5S', '6S', '4S', '2S', 'jS'].filter(id => p.c.moves[id]).forEach((id, q) => {
-    const m = p.c.moves[id], cw = 27, bx = flip ? mx - 12 - (q + 1) * (cw + 3) : mx + 2 * segW + gap + 16 + q * (cw + 3), by = my - 6;
-    const rem = (p.cd[id] || 0) / m.cd;
+    const m = p.c.moves[id], cw = 24, bx = flip ? mx - 12 - (q + 1) * (cw + 2) : mx + 2 * segW + gap + 16 + q * (cw + 2), by = my - 6;
+    const rem = Math.max((p.cd[id] || 0) / m.cd, Math.min(1, (p.tcd && p.tcd[id] || 0) / 60));   // simple-input cooldown, or the short motion-input one
     rrect(bx, by, cw, 24, 6, '#fff'); rrect(bx + 2, by + 2, cw - 4, 20, 5, rem > 0 ? '#3a2a5c' : p.c.color);
     if (rem > 0) { ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(bx + 2, by + 2, (cw - 4) * rem, 20); }
-    label({ '5S': 'S', '6S': '→S', '4S': '←S', '2S': '↓S', 'jS': 'jS' }[id], bx + cw / 2, by + 13, 13, rem > 0 ? '#8a7aa8' : '#fff', 'center', 800, true);
+    label({ '5S': 'S', '6S': '→S', '4S': '←S', '2S': '↓S', 'jS': 'jS' }[id], bx + cw / 2, by + 13, 12, rem > 0 ? '#8a7aa8' : '#fff', 'center', 800, true);
   });
+  // Counter Spurt chip: gold when it's ready (cooldown over and 50 Spurt banked)
+  {
+    const q = ['5S', '6S', '4S', '2S', 'jS'].filter(id => p.c.moves[id]).length, cw = 28;
+    const bx = flip ? mx - 12 - q * 26 - cw - 2 : mx + 2 * segW + gap + 16 + q * 26 + 2, by = my - 6;
+    const rem = (p.gcCd || 0) / GC_CD, ready = rem <= 0 && p.meter >= 50;
+    rrect(bx, by, cw, 24, 6, '#fff'); rrect(bx + 2, by + 2, cw - 4, 20, 5, ready ? PAL.gold : '#3a2a5c');
+    if (rem > 0) { ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(bx + 2, by + 2, (cw - 4) * rem, 20); }
+    label('CS', bx + cw / 2, by + 13, 12, ready ? PAL.ink : '#8a7aa8', 'center', 900, true);
+  }
 }
 function comboCounter(p, i) {
   const o = opp(p);
@@ -724,6 +732,10 @@ function drawHUD() {
 }
 function drawTrainingHUD() {
   const t = G.training;
+  if (typeof Net !== 'undefined' && Net.practice) {   // practising while the online room waits
+    const pulse = 0.6 + 0.4 * Math.sin(G.frameCount / 12);
+    rrect(W / 2 - 170, 172, 340, 24, 12, 'rgba(20,10,40,.85)'); label(`ROOM ${Net.code} · WAITING FOR AN OPPONENT`, W / 2, 185, 13, `rgba(246,195,67,${pulse})`, 'center', 900, true);
+  }
   panel(W / 2 - 250, 84, 500, 82, PAL.turf);
   const rs = { off: '', recording: '   ● REC', ready: '   [8] play', playing: '   ▶ PLAYBACK' }[TOOLS.recState];
   label(`[1] Dummy: ${t.dummy.toUpperCase()}    [2] Guard: ${t.block.toUpperCase()}    [3] Hitboxes: ${G.showBoxes ? 'ON' : 'OFF'}    [4] Reset`, W / 2, 100, 13.5, '#efe8fb', 'center', 700);
@@ -845,8 +857,8 @@ function drawPause() {
   baseT();
   ctx.fillStyle = 'rgba(24,11,42,.55)'; ctx.fillRect(0, 0, W, HGT);
   slant(-40, 0, 420, HGT, 0, 'rgba(34,17,60,.95)'); ctx.fillStyle = PAL.gold; ctx.fillRect(380, 0, 3, HGT);
-  txt('PAUSED', 40, 56, 56, '#fff', 'left', PAL.ink);
-  ledText('STEWARDS INQUIRY', 42, 96, 2.2, PAL.led, 'left');
+  txt(UI.pauseSub ? 'TRAINING' : 'PAUSED', 40, 56, 56, '#fff', 'left', PAL.ink);
+  ledText(UI.pauseSub ? 'OPTIONS' : 'STEWARDS INQUIRY', 42, 96, 2.2, PAL.led, 'left');
   const items = pauseItems(), sp = Math.min(36, (HGT - 136) / items.length), hh = sp - 6;
   items.forEach(([l], i) => {
     const s = i === UI.pauseIdx, y = 122 + i * sp;
@@ -871,21 +883,21 @@ function drawMoves() {
     ['Throw', 'L + M (close)', 'Hold back for a back throw · tech with L + M'],
     ['Dash / dash attacks', '→→  ·  →→ + L/M/H', 'L jab · M lunge · H flying kick (overhead) · or bind a Dash button in Controls'],
     ['Hop overhead', '→ + M', 'Must be blocked standing · lows beat it'],
-    ['Counter Spurt', 'S + H while blocking', 'Costs 50 Spurt · invincible push-away · also breaks a command grab as it connects'],
+    ['Counter Spurt', 'Counter Spurt button while blocking', 'Costs 50 Spurt · invincible push-away · also breaks a command grab as it connects · 3 s cooldown'],
     ['Taunt', 'L + H', '+8 Spurt · every hit on a taunt is a counter-hit'],
     ['Quick / slow rise', 'hold button / hold ↓', 'While knocked down (not after throws or supers)'],
     ['Skills', 'motion + L / M  ·  motion + H', 'L and M versions are free · H is the EX (50 Spurt)'],
     ['Skill shortcut', 'S + direction', 'Easy version of the M skill: cooldown, -10% damage'],
   ];
   if (c.lightChain) rows.push(['Low chain (' + c.short + ')', '2L, 2L, 2L…', 'Crouching jabs chain into themselves']);
-  if (c.dashCancel) rows.push(['Dash cancel (' + c.short + ')', '→→ while a normal connects', 'Costs 10 Spurt · keep the pressure on']);
+  if (c.dashCancel) rows.push(['Dash cancel (' + c.short + ')', '→→ while a normal connects', 'Costs 50 Spurt · 10 frames before she can attack · keep the pressure on']);
   if (c.airDash) rows.push(['Air dash (' + c.short + ')', '→→ / ←← in the air', 'Once per jump, needs some height']);
   if (c.punisher) rows.push(['Punish (' + c.short + ')', 'hit them while they recover', '+20% damage and extra hitstun: PUNISH!']);
-  if (c.specialChain) rows.push(['Special chain (' + c.short + ')', 'skill › another skill on hit', 'Each skill once per combo']);
+  if (c.specialChain || c.puppet) rows.push(['Special chain (' + c.short + ')', c.puppet ? 'Friend skill › another once she hits' : 'skill › another skill on hit', 'Each skill once per combo']);
   if (c.lowHpBoost) rows.push(['Miracle mode (' + c.short + ')', 'below 30% health', '+15% damage']);
   if (c.ai === 'grapple') rows.push(['Command grabs (' + c.short + ')', '→S · S · ←S', 'Can\'t be blocked or teched · ←S only catches jumpers']);
   if (c.puppet) rows.push(['Friend (' + c.short + ')', 'every skill', 'The Friend attacks · one command at a time · hit her mid-attack and she leaves for 4s']);
-  if (c.projMax === 3 && c.ai === 'setplay') rows.push(['Potions (' + c.short + ')', 'up to 3 out', 'Go off when stepped on · any attack or projectile pops one · →S sets them all off']);
+  if (c.projMax === 3 && c.ai === 'setplay') rows.push(['Potions (' + c.short + ')', 'up to 3 out', 'Go off when stepped on · any attack or projectile pops one · →S sets them all off · all gone if she gets hit']);
   if (c.ai === 'footsies') rows.push(['Poke follow-up (' + c.short + ')', 'S after Flame Thrust hits', 'Flame Twist launches · only on hit, not on block']);
   const sp = Object.values(c.moves).filter(m => m.name && (m.kind === 'special' || m.kind === 'super') && !m.isEx && !m.varOf && !m.followOf);
   panel(20, 94, W - 40, 414, c.color);
@@ -941,14 +953,14 @@ function drawControls() {
   const xs = [56, 350, 550, 750];
   ['ACTION', ...CTL_COLS].forEach((h, k) => label(h, xs[k], 72, 15, PAL.gold, 'left', 900, true));
   controlsRows().forEach((r, i) => {
-    const y = 96 + i * 25.5, selRow = i === C.row;
-    if (selRow) slant(40, y - 12, W - 92, 24, 6, 'rgba(255,255,255,.1)');
+    const y = 94 + i * 24.4, selRow = i === C.row;
+    if (selRow) slant(40, y - 11, W - 92, 22, 6, 'rgba(255,255,255,.1)');
     label(r.label, xs[0], y, 16, r.act ? PAL.gold : '#fff', 'left', r.act ? 900 : 700, !!r.act);
     if (r.act) return;
     const cells = [KEYMAP[0][r.a].map(keyName).join(' / ') || '—', KEYMAP[1][r.a].map(keyName).join(' / ') || '—', (PADMAP[r.a] || []).map(b => PADNAMES[b] || 'B' + b).join(' / ') || '—'];
     cells.forEach((t, k) => {
       const active = selRow && C.col === k, waiting = active && UI.ctl && UI.ctl.wait;
-      if (active) slant(xs[k + 1] - 10, y - 12, 180, 24, 6, waiting ? PAL.gold : PAL.rose);
+      if (active) slant(xs[k + 1] - 10, y - 11, 180, 22, 6, waiting ? PAL.gold : PAL.rose);
       label(waiting ? (k < 2 ? 'press a key…' : 'press a button…') : t, xs[k + 1], y, 15, waiting ? PAL.ink : active ? '#fff' : '#7fe0ff', 'left', 700);
     });
   });
@@ -1008,13 +1020,19 @@ function drawRepWarn() {
   hintBar('← → choose    ·    F / Enter confirm    ·    Esc back');
 }
 function drawReplayHUD() {
+  if (RP.hide) {   // hidden: a short reminder of how to bring the controls back, then nothing
+    RP.hideT = (RP.hideT || 0) + 1;
+    if (RP.hideT < 120) { ctx.globalAlpha = Math.min(1, (120 - RP.hideT) / 30); label(RP.hide === 2 ? 'Clean view · H to show everything' : 'Controls hidden · H again for a clean view', W / 2, HGT - 60, 13, '#fff', 'center', 800, true); ctx.globalAlpha = 1; }
+    if (RP.hide === 1 && RP.idx >= RP.n) txt('END OF REPLAY', W / 2, HGT / 2 + 80, 30, PAL.gold);
+    return;
+  }
   const y = 96, w = 440, x = W / 2 - w / 2;
   panel(x - 14, y - 22, w + 28, 66, PAL.rose);
   ctx.fillStyle = '#3a2a5c'; ctx.fillRect(x, y, w, 8);
   ctx.fillStyle = PAL.rose; ctx.fillRect(x, y, w * (RP.idx / Math.max(1, RP.n)), 8);
   const sec = f => `${Math.floor(f / 3600)}:${String(Math.floor(f / 60) % 60).padStart(2, '0')}`;
   label(`REPLAY  ${RP.paused ? '❚❚' : '▶'} ${RP.speed}x   ${sec(RP.idx)} / ${sec(RP.n)}`, W / 2, y - 8, 16, '#fff', 'center', 800, true);
-  label('Space pause · ←/→ ±5s · ↑/↓ speed · . step · R restart · ` hitboxes · D save · Esc exit', W / 2, y + 24, 12, '#b9bfdc', 'center', 600);
+  label('Space pause · ←/→ ±5s · ↑/↓ speed · . step · R restart · ` hitboxes · H hide · D save · Esc exit', W / 2, y + 24, 12, '#b9bfdc', 'center', 600);
   if (RP.warn) label(RP.warn, W / 2, y + 40, 12, '#ffb36b', 'center', 700);
   if (RP.idx >= RP.n) txt('END OF REPLAY', W / 2, HGT / 2 + 80, 30, PAL.gold);
 }

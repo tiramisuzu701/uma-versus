@@ -57,7 +57,7 @@ function aiCombosFor(me, lv, o) {
     if (lv.combo === 1 && (t.seq.includes('jc') || t.seq.includes(',') || t.seq.includes('dc') || t.level > 1)) return false;
     if (lv.combo === 2 && t.level > 1 && t.seq.includes(',')) return false;   // Hard skips the link routes
     if (t.corner && !nearWall) return false;
-    if (t.seq.includes('dc') && me.meter < 10 * t.seq.split(' dc').length) return false;   // dash cancels cost 10 Spurt each
+    if (t.seq.includes('dc') && me.meter < 50 * (t.seq.split(' dc').length - 1)) return false;   // dash cancels cost 50 Spurt each
     return comboRange(me.cid, t.seq, me, lv) > 0;
   });
 }
@@ -160,7 +160,7 @@ function cpuInput(me, level) {
     if (ai.techKey !== me.frame - me.t) { ai.techKey = me.frame - me.t; ai.techRoll = me.frame <= ai.techUntil; ai.techAt = 1 + Math.floor(rnd() * 4); }
     if (ai.techRoll && me.t >= ai.techAt && me.t <= 10) {
       if (!G.p[1 - me.side].noTech) out.L = out.M = 1;
-      else if (me.meter >= 50 && lv.tech > 0.1) out.S = out.H = 1;   // a command grab: only Counter Spurt gets out
+      else if (me.meter >= 50 && lv.tech > 0.1) out.C = 1;   // a command grab: only Counter Spurt gets out
     }
     return out;
   }
@@ -195,7 +195,7 @@ function cpuInput(me, level) {
       const cornered = me.x < 220 || me.x > STAGE_W - 220, pressured = cornered ? ai.blockRun >= 2 : ai.blockRun >= 4;
       ai.gcAt = pressured && me.meter >= 50 && rnd() < lv.gc ? 2 + Math.floor(rnd() * 4) : -1;
     }
-    if (ai.gcAt >= 0 && me.t >= ai.gcAt && me.meter >= 50) { ai.gcAt = -1; out.S = out.H = 1; return out; }
+    if (ai.gcAt >= 0 && me.t >= ai.gcAt && me.meter >= 50 && !me.gcCd) { ai.gcAt = -1; out.C = 1; return out; }
     out[backK] = 1; if (ai.low) out.d = 1; return out;
   }
   if (++ai.blockGap > 20) ai.blockRun = 0;

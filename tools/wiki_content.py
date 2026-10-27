@@ -37,7 +37,7 @@ def guard(g): return ' / '.join(GUARD.get(x, x) for x in g.split('/')) if g else
 
 NORMAL_NAMES = {'5L': 'Standing L', '5M': 'Standing M', '5H': 'Standing H', '2L': 'Crouching L', '2M': 'Crouching M (slide)', '2H': 'Crouching H (launcher)',
                 '6M': 'Hop overhead (→M)', 'jL': 'Jumping L', 'jM': 'Jumping M', 'jH': 'Jumping H', 'dL': 'Dash L', 'dM': 'Dash M', 'dH': 'Dash H',
-                'throw': 'Throw (L+M)', 'GC': 'Counter Spurt (S+H blocking)'}
+                'throw': 'Throw (L+M)', 'GC': 'Counter Spurt (its own button, while blocking)'}
 NORMAL_ORDER = ['5L', '5M', '5H', '2L', '2M', '2H', '6M', 'jL', 'jM', 'jH', 'dL', 'dM', 'dH', 'throw', 'GC']
 
 # ------------------------------------------------------------------ written content
@@ -71,11 +71,11 @@ CHAR = {
     'tips': ['L Great Escape stops in front, M runs through. Mix them up so they can\'t punish on reaction.', 'Blocked M Silent Flicker leaves you about 240 px away (200 for L, 270 for EX). Very few moves reach that.', 'Air dash needs some height, and landing out of it has 7 frames of recovery.'],
   },
   'gs': {
-    'plan': ["Gold Ship wants her turn and she doesn't want to give it back. 5L is 4 frames, recovers faster than anyone else's and is +2 on block. 2L chains into itself, and Barrage is plus too.",
-             "Golshi Rush is where the mixups come from. During the dash you can slide (low), hop chop (overhead), grab (can't be teched) or stop and do something else. Dash cancels (→→ after a normal, 10 Spurt) keep pressure going after a blocked string."],
+    'plan': ["Gold Ship wants her turn and she doesn't want to give it back. 5L is 4 frames, recovers faster than anyone else's and is plus on block. 2L chains into itself up to twice, and Barrage is plus too.",
+             "Golshi Rush is where the mixups come from. During the dash you can slide (low), hop chop (overhead), grab (can't be teched) or stop and do something else. Dash cancels (→→ after a normal, 50 Spurt; she can't attack for the first 10 frames of the dash) keep pressure going after a blocked string."],
     'strong': ['Fastest normals in the game (4f 5L, 6f 5M)', 'Lots of plus-on-block pressure', 'Four-way command dash mixup'],
     'weak': ['No invincible reversal attack. EX Golshi Rush is invincible, but it\'s a dash', 'Golshi Dropkick!! is around −22 on block', 'Has a hard time against keep-away'],
-    'tips': ['End blocked strings with L Barrage (+5) to keep your turn.', 'Out of the dash: grab beats blocking, slide beats standing guard, chop beats crouching guard.', 'Golshi Mode adds 2 frames of blockstun to everything for 6 seconds, so even more of her stuff is plus.'],
+    'tips': ['End blocked strings with L Barrage (+2) to keep your turn.', 'Out of the dash: grab beats blocking, slide beats standing guard, chop beats crouching guard.', 'Golshi Mode adds 1 frame of blockstun to everything for 6 seconds, so even more of her stuff is plus.'],
   },
   'vo': {
     'plan': ["Everything starts with a hard knockdown: Full Throttle, Pit Stop, or EX Drift Hop and EX Drift Drop. No quick rise means the opponent always gets up on the same frame, so her setups always line up.",
@@ -120,11 +120,11 @@ CHAR = {
     'tips': ['L Test Tube Toss lands close and can hit them in a combo. M lands farther away as a trap.', 'Delayed Reaction on a knocked-down opponent goes off as they get up.', "Bursts are blocked by holding away from Tachyon, wherever the potion is. Block them like any other attack."],
   },
   'mc': {
-    'plan': ["Manhattan Cafe's skills send her Friend, Sunday Silence, to attack for her. Phantom Rush charges across the screen, Shadow Sweep is a low, Night Drop falls from above as an overhead, and Rising Shade is an anti-air. Cafe recovers almost right away, so she can attack at the same time.",
-             "That means a low from Cafe and an overhead from the Friend at once, or a Friend rush that keeps you blocking while Cafe walks in. The Friend takes one command at a time and has to come back before the next. Hitting her while she attacks sends her away, and Cafe is much weaker without her."],
-    'strong': ['Attacks from two places at once', 'High-low mixups with the Friend', 'Recovers early from every skill'],
-    'weak': ['Hit the Friend and Cafe loses her offence', 'No invincible reversal without meter', 'One command at a time'],
-    'tips': ['Night Drop takes a moment to fall, so time it with a low from Cafe.', 'Phantom Rush hits after Cafe has recovered, so you can link 5M after it.', 'EX skills make Cafe invincible as well.'],
+    'plan': ["Manhattan Cafe's skills send her Friend, Sunday Silence, to attack for her. Phantom Rush charges across the screen, Shadow Sweep is a low, Night Drop falls from above as an overhead, and Rising Shade is an anti-air. Cafe can't act until the Friend's attack is over, so a blocked Friend skill leaves her open.",
+             "Her strength is where the Friend can reach: full screen with Phantom Rush, right on top of you with Night Drop. The Friend takes one command at a time and has to come back before the next. Hitting her while she attacks sends her away, and Cafe is much weaker without her."],
+    'strong': ['Attacks reach from anywhere on screen', 'Low sweep and overhead drop from the Friend', 'Friend skills combo off her normals'],
+    'weak': ['Can\'t act until the Friend finishes, so blocked skills are punishable', 'Hit the Friend and Cafe loses her offence', 'No invincible reversal without meter'],
+    'tips': ['Night Drop takes a moment to fall, so time it with a low from Cafe.', 'Cafe can\'t act until the Friend finishes, so a blocked Friend skill is punishable. Use them in combos or from range.', 'EX skills make Cafe invincible as well.'],
   },
   'df': {
     'plan': ["Dantsu Flame wins the space in front of her. She has the fastest walk in the cast, a quick dash and backdash, and normals that recover fast, so she can step into range, poke, and step back out before you answer.",
@@ -152,27 +152,27 @@ SYSTEMS = f"""
   <tr><th>Move / jump / crouch</th><td>W A S D</td><td>Arrow keys</td><td>D-pad / left stick</td></tr>
   <tr><th>Light (L)</th><td>F</td><td>J or Num1</td><td>X / □</td></tr><tr><th>Medium (M)</th><td>G</td><td>K or Num2</td><td>Y / △</td></tr>
   <tr><th>Heavy (H)</th><td>H</td><td>L or Num3</td><td>B / ○</td></tr><tr><th>Skill (S)</th><td>T</td><td>I or Num5</td><td>A / ✕</td></tr>
-  <tr><th>Throw (L+M)</th><td>R</td><td>U or Num4</td><td>LB</td></tr><tr><th>Super (S+H)</th><td>Y</td><td>O or Num6</td><td>RB</td></tr>
+  <tr><th>Counter Spurt</th><td>V</td><td>; or Num8</td><td>LT</td></tr><tr><th>Throw (L+M)</th><td>R</td><td>U or Num4</td><td>LB</td></tr><tr><th>Super (S+H)</th><td>Y</td><td>O or Num6</td><td>RB</td></tr>
   <tr><th>Taunt (L+H)</th><td>E</td><td>P or Num7</td><td>Back</td></tr><tr><th>Pause</th><td colspan="3">Esc / Start</td></tr></tbody></table></div>
 
   <h2>Notation</h2>
-  <p>Directions use numpad notation with the character facing right: <b>5</b> is neutral, <b>2</b> down, <b>6</b> forward, <b>4</b> back. So <b>5M</b> is standing medium, <b>2M</b> crouching medium and <b>j.H</b> jumping heavy. <b>236</b> is ↓↘→, <b>623</b> is →↓↘, <b>214</b> is ↓↙← and <b>41236</b> is ←↙↓↘→. In combos, <b>›</b> means cancel or link into the next move.</p>
+  <p>Directions use numpad notation with the character facing right. 5 is neutral, 2 down, 6 forward, 4 back, etc. This means that 5M is standing medium, 2M crouching medium and j.H jumping heavy. 236 is ↓↘→, 623 is →↓↘, 214 is ↓↙← and so on so forth.</p>
 
   <h2>Defense</h2>
   <ul>
-  <li>Hold back to block, and down-back to block lows. Overheads (jumping attacks, hops, dive kicks) have to be blocked standing.</li>
-  <li>Holding back during a dash cancels it, so you can block straight out of one.</li>
-  <li>L+M up close throws, and holding back throws the other way. Throws beat blocking, but you can't combo after a normal throw. Press L+M as a throw connects to tech it. Command grabs ignore L+M, but S+H as one connects breaks it with Counter Spurt (50 Spurt).</li>
-  <li><b>Counter Spurt</b>: S+H while blocking. Costs 50 Spurt and knocks them away.</li>
-  <li>Backdash (←←) gets you out of throws, but it isn't invincible to attacks, so a quick hit still catches it, especially in the corner.</li>
-  <li>While knocked down, hold any attack button to get up early or hold ↓ to get up late. You can't do either after a hard knockdown (throws, command grabs, supers and some skills like Vodka's Full Throttle).</li>
+  <li>Hold back to block, and down-back to block low. Overheads (jumping attacks, hops, dive kicks) have to be blocked standing.</li>
+  <li>Holding back during a dash cancels it, so you can block straight out of the dash.</li>
+  <li>L+M up close throws, and holding back throws backwards. Throws beat blocking. Press L+M as a throw connects to tech it and avoid it. Mashing L+M while you're stuck in a combo or blockstun locks your tech out for a moment. Command grabs ignore L+M, but pressing Counter Spurt as teching breaks it (50 Spurt).</li>
+  <li><b>Counter Spurt</b> - Press Counter Spurt (V / LT) while blocking. Costs 50 Spurt, knocks them away, and has a 3-second cooldown (the CS chip by your Spurt gauge lights up when it's ready).</li>
+  <li>Backdash (44 / ←←) has invulnerability frames against throws, but not attacks.</li>
+  <li>While knocked down, hold any attack button to get up early or hold 2 / ↓ to get up late. You can't do either after a hard knockdown (throws, command grabs, supers and some skills like Vodka's Full Throttle).</li>
   </ul>
 
   <h2>Skills and Spurt</h2>
   <ul>
-  <li>Skill motion + <b>L</b> or <b>M</b> gives the two free versions. Motion + <b>H</b> is the <b>EX</b> version and costs 50 Spurt. Without 50 Spurt you get the M version.</li>
-  <li>There's also a shortcut: S, →S, ←S or ↓S does the M version without the motion, but it goes on cooldown and does 10% less damage.</li>
-  <li>Spurt builds as you deal and take damage. It pays for EX skills (50), Counter Spurt (50), Gold Ship's dash cancel (10) and supers (100).</li>
+  <li>Skill motion + L or M gives the two free versions. Motion + H is the EX version and costs 50 Spurt. Without 50 Spurt you get the M version.</li>
+  <li>There's also a shortcut: S, →S, ←S or ↓S does the M version without the motion, but it goes on long cooldown and does 10% less damage.</li>
+  <li>Spurt builds as you deal and take damage. It pays for EX skills (50), Counter Spurt (50), Gold Ship's dash cancel (50) and supers (100).</li>
   </ul>
 
   <h2>Combos</h2>
@@ -181,47 +181,47 @@ SYSTEMS = f"""
   <li>Mashing L on hit does an auto-combo: 5L › 5M › 5H › skill.</li>
   <li>Any normal that connects can be cancelled into a skill or a super.</li>
   <li>After a launcher (2H, or the second hit of 5H), hold ↑ to jump after them for an air combo.</li>
-  <li>The input buffer is 9 frames, and it remembers the direction and motion you entered, so inputs during hitstop still come out right.</li>
+  <li>The input buffer is 9 frames.</li>
   </ul>
+
   <h2>Scaling and limits</h2>
   <ul>
-  <li><b>Damage scaling</b>: the first hit does full damage. After that it depends on the starter (lights 80%, mediums 90%, heavies, counter hits and punishes 100%), then drops 13% per hit from the 3rd hit down to a floor of 25%. Supers keep at least 50%. The combo counter shows the scaling on the next hit.</li>
-  <li><b>Juggle points</b>: hits on an airborne opponent cost juggle points (normals 1, skills 2, bounces 1). At 10 you can't hit them in the air anymore.</li>
-  <li><b>Ground bounce</b>: j.H in an air combo slams them into the floor and they bounce back up for a 2H relaunch. Once per combo.</li>
-  <li><b>Wall bounce</b>: some EX knockdowns bounce them off the corner or the edge of the screen. Once per combo.</li>
+  <li><b>Damage scaling</b>: the first hit does full damage. After that it depends on the starter (lights start at 80%, mediums 90%, heavies, counter hits and punishes 100%), then drops 13% per hit from the 3rd hit down to a floor of 25%. Supers retain at least 50% damage. The combo counter displays the scaling for the next hit.</li>
+  <li><b>Juggle points</b>: hits on an airborne opponent cost juggle points (normals 1 and bounces 1, skills 2). At 10 you can't hit your opponent in the air anymore.</li>
+  <li><b>Ground bounce</b>: j.H in an air combo slams them into the floor and they bounce back up. Only happens once per combo.</li>
+  <li><b>Wall bounce</b>: some EX knockdowns bounce them off the corner or the edge of the screen. Same as ground bounce, this can only occur once per combo.</li>
+  <li><b>Projectiles</b>: if you get hit or thrown, your fireballs and Tachyon's potions vanish from the screen. Blocking doesn't clear them, but super projectiles stay.</li>
+  <li><b>Skill cooldowns</b>: the S-button shortcut puts a skill on its usual cooldown. Doing it with its motion has a cooldown of 10 frames (1/6 of a second).</li>
+  <li><b>Repeats</b>: the same skill can hit twice in one combo and the same normal four times. Past that the hit passes straight through (you'll see REPEAT) and the combo dies.</li>
   <li><b>Hitstun decay</b>: after 2 seconds of combo, hits do less hitstun and juggled opponents fall faster.</li>
   <li><b>Combo limit</b>: after 32 hits or 7 seconds, hits pass through and they drop out.</li>
-  <li><b>Link</b> in a combo means wait until you recover, then start the next move.</li>
   </ul>
 
   <h2>Movement</h2>
   <ul>
-  <li>Double-tap → to dash, ←← to backdash. L, M or H during a dash (or →→ + button) is a dash attack: L jab, M lunge, H leaping overhead kick.</li>
-  <li>You can also bind a <b>Dash</b> button in Controls. It types →→ for you (← + Dash for a backdash), and Dash + L/M/H does a dash attack.</li>
-  <li>→+M is a hop overhead. You're briefly airborne, so lows beat it.</li>
-  <li>Only Silence Suzuka can air dash. She needs some height, can't attack for the first 8 frames, and has landing recovery.</li>
+  <li>Double-tap → to dash, ←← to backdash. L, M or H during a dash (or →→ + button) is a dash attack: L jab, M lunge, H overhead kick.</li>
+  <li>You can also bind a Dash button in Controls. It inputs →→ for you (← + Dash for a backdash), and Dash + L/M/H does a dash attack.</li>
+  <li>→+M is a hop overhead. You're briefly airborne during this.</li>
   </ul>
 
   <h2>Accounts</h2>
   <ul>
-  <li>Accounts are optional and guests can play every mode. Make one from <b>Account</b> on the main menu.</li>
-  <li>Your display name shows up for your opponent online.</li>
-  <li>Controls, volume, Options, combo trial, tutorial and Arcade progress are saved to your account and come back when you sign in somewhere else.</li>
+  <li>Accounts are optional, guests can play every mode. Make one from Account on the main menu.</li>
+  <li>Settings and progress are saved to your account.</li>
   <li><b>Friends</b>: add someone by display name. Once you've both added each other you can see when they're online and invite them to your room.</li>
-  <li><b>Leaderboards</b> rank players by online wins, win rate and matches. Only matches both players recorded count.</li>
-  <li>Online matches you finish while signed in are saved, and the Account screen shows your record, win rate and most-played runner. VS CPU matches aren't counted.</li>
+  <li>Leaderboards rank players by online wins, win rate and matches. Every online match counts, including rematches and matches against Guests. (This is very finicky right now.)</li>
   </ul>
 
   <h2>Training, replays and online</h2>
   <ul>
-  <li><b>Training</b> shows damage, scaling, juggle points, frame advantage and hitboxes. Keys: 1 dummy, 2 dummy guard, 3 hitboxes, 4 reset, 5 input display, 6 frame meter, 7 record dummy, 8 play recording.</li>
-  <li>The <b>frame meter</b> shows one cell per frame for both players: green startup, red active, blue recovery, yellow stun, outlined when invincible. It also shows your startup and the frame advantage.</li>
+  <li>Training options (pause › Training options): your and the dummy's Spurt (full, half, empty or normal), health (refill, low or no refill), counter hit on every first hit, dummy throw tech (off, always or random) and dummy wake-up (normal, quick or late).</li>
+  <li>The frame meter shows one cell per frame for both players: green startup, red active, blue recovery, yellow stun, outlined when invincible. It also displays startup and the frame advantage.</li>
   <li><b>Dummy recording</b>: 7 to take control of the dummy and record up to 10 seconds, 7 again to stop, then 8 to have it loop while you practice.</li>
-  <li><b>Combo trials</b> has every runner's combos as challenges, with a demo on 9. Cleared trials are saved.</li>
-  <li><b>Replays</b>: every Versus, VS CPU and online match is recorded. R on the results screen watches it, D saves the file.</li>
-  <li><b>Tutorial</b> walks through the basics in seven short lessons, from walking to supers, and checks each step as you do it.</li>
-  <li><b>Arcade</b> is seven CPU races that get harder, then your runner's rival as the final race, then her ending. Clear times are saved.</li>
-  <li><b>Online</b> uses rollback netcode and room codes. Hosts can list their room so anyone can find it, and let people watch. Both players need the same build, and this wiki is for build <b class="mono">{BUILD}</b>.</li>
+  <li>Combo trials have every runner's simpler wiki combos as challenges.</li>
+  <li><b>Replays</b>: every Versus, VS CPU and online match is recorded. R on the results screen watches it, D saves the file. While watching, H (or LT) hides the replay controls, and pressing it again hides the whole HUD for a clean view.</li>
+  <li>The tutorial walks through the basics in seven short lessons, from walking to supers.</li>
+  <li>Arcade is seven CPU battles that get harder, then your runner's rival as the final race, then her ending.</li>
+  <li>Online uses rollback netcode and room codes. Hosts can list their room so anyone can find it, and let people watch. While you wait for someone to join, you can use training. The match lobby opens as soon as they join. Both players need the same build, and this wiki is for build <b class="mono">{BUILD}</b>.</li>
   <li><b>Colours</b>: every runner has six colour palettes. Press ↑ ↓ on character select (M in the online lobby).</li>
   </ul>
   </div>

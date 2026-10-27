@@ -8,7 +8,13 @@ let RES = 1;
 function baseT(dx = 0, dy = 0) { ctx.setTransform(RES, 0, 0, RES, dx * RES, dy * RES); }
 const SPR = {};
 
-function loadImg(src) { return new Promise(r => { const i = new Image(); i.onload = () => r(i); i.src = src; }); }
+// rejects instead of hanging forever, so the boot screen can say what went wrong
+function loadImg(src, what = 'an image') {
+  return new Promise((ok, fail) => {
+    const i = new Image(), t = setTimeout(() => fail(new Error('Timed out loading ' + what)), 45000);
+    i.onload = () => { clearTimeout(t); ok(i); }; i.onerror = () => { clearTimeout(t); fail(new Error("Couldn't load " + what)); }; i.src = src;
+  });
+}
 function canvasOf(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 
 // ------------------------------------------------------------------ colour palettes
@@ -84,19 +90,29 @@ function shadowColour(r, g, b) {
 // cid: also keep thin features drawn inside the skin (a mouth or lash line with skin on both sides), even when
 // their colour is one the hair uses too
 function recolour(img, fn, cid) {
-  const c = canvasOf(img.width, img.height), x = c.getContext('2d');
+  const c = canvasOf(img.width, img.height), x = c.getContext('2d', { willReadFrequently: true });
   x.drawImage(img, 0, 0);
-  const d = x.getImageData(0, 0, c.width, c.height), a = d.data, memo = new Map(), W4 = c.width * 4;
-  const skin = cid && SKIN[cid] ? new Set(SKIN[cid].map(h => parseInt(h.slice(1), 16))) : null;
-  const isSk = i => i >= 0 && i < a.length && a[i + 3] && skin.has((a[i] << 16) | (a[i + 1] << 8) | a[i + 2]);
-  const inside = skin ? new Uint8Array(a.length >> 2) : null;
-  if (skin) for (let i = 0; i < a.length; i += 4) if (a[i + 3] && ((isSk(i - 4) && isSk(i + 4)) || (isSk(i - W4) && isSk(i + W4)))) inside[i >> 2] = 1;
-  for (let i = 0; i < a.length; i += 4) {
-    if (!a[i + 3] || (inside && inside[i >> 2])) continue;
-    const key = (a[i] << 16) | (a[i + 1] << 8) | a[i + 2];
-    let o = memo.get(key);
-    if (!o) { o = fn(a[i], a[i + 1], a[i + 2]).map(v => Math.max(0, Math.min(255, Math.round(v)))); memo.set(key, o); }
-    a[i] = o[0]; a[i + 1] = o[1]; a[i + 2] = o[2];
+  // One pass over 32-bit pixels (a sheet is ~1.3M of them): colours are mapped once each through a memo, and the
+  // skin test reads a precomputed mask instead of hashing neighbours. This used to take ~80 ms a sheet (several
+  // hundred on slower laptops), which froze the select screens whenever someone tried a new runner or colour.
+  const d = x.getImageData(0, 0, c.width, c.height), u = new Uint32Array(d.data.buffer), n = u.length, w = c.width;
+  const le = new Uint8Array(new Uint32Array([1]).buffer)[0] === 1;
+  const rgbOf = v => le ? [v & 255, (v >>> 8) & 255, (v >>> 16) & 255] : [(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255];
+  const pack = (r, g, b, a) => le ? ((a << 24) | (b << 16) | (g << 8) | r) >>> 0 : ((r << 24) | (g << 16) | (b << 8) | a) >>> 0;
+  const AM = le ? 0xff000000 : 0xff, CM = le ? 0x00ffffff : 0xffffff00;
+  let inside = null;
+  if (cid && SKIN[cid]) {
+    const skin = new Set(SKIN[cid].map(h => { const v = parseInt(h.slice(1), 16); return pack(v >> 16, (v >> 8) & 255, v & 255, 0) & CM; }));
+    const sk = new Uint8Array(n); for (let i = 0; i < n; i++) { const v = u[i]; if ((v & AM) && skin.has(v & CM)) sk[i] = 1; }
+    inside = new Uint8Array(n);
+    for (let i = 0; i < n; i++) if ((u[i] & AM) && ((i > 0 && i < n - 1 && sk[i - 1] && sk[i + 1]) || (i >= w && i < n - w && sk[i - w] && sk[i + w]))) inside[i] = 1;
+  }
+  const memo = new Map();
+  for (let i = 0; i < n; i++) {
+    const v = u[i]; if (!(v & AM) || (inside && inside[i])) continue;
+    const key = v & CM; let o = memo.get(key);
+    if (o === undefined) { const [r, g, b] = rgbOf(v); const q = fn(r, g, b).map(t => Math.max(0, Math.min(255, Math.round(t)))); o = pack(q[0], q[1], q[2], 0) & CM; memo.set(key, o); }
+    u[i] = (v & AM) | o;
   }
   x.putImageData(d, 0, 0); return c;
 }
@@ -113,18 +129,41 @@ function palSheet(cid, pal, right) {
   }
   return right ? S.pal[key].imgR : S.pal[key].img;
 }
+// Menus (select screens, the online lobby, faces) only show a few frames, so until a match builds the full sheet,
+// recolour just the 64x64 cell being drawn (well under a millisecond) instead of the whole 1024x1280 sheet. Building a
+// whole sheet the moment someone scrolled to a new runner or colour froze the screen for a moment each time.
+const PAL_FN = {};
+function palSrc(cid, pal, right, idx) {
+  const S = SPR[cid], key = pal === 'shadow' ? 'shadow' : (pal | 0) % PALETTES.length;
+  const sx = (idx % S.cols) * 64, sy = Math.floor(idx / S.cols) * 64;
+  if (S.pal[key]) return [right ? S.pal[key].imgR : S.pal[key].img, sx, sy];
+  const ck = key + (right ? 'r' : 'l') + idx, cells = S.cells || (S.cells = {});
+  if (!cells[ck]) {
+    const fk = cid + '.' + key, fn = PAL_FN[fk] || (PAL_FN[fk] = key === 'shadow' ? shadowColour : palColour(PALETTES[key], cid));
+    const crop = canvasOf(64, 64); crop.getContext('2d').drawImage(right ? S.imgR : S.img, sx, sy, 64, 64, 0, 0, 64, 64);
+    cells[ck] = recolour(crop, fn, key === 'shadow' ? null : cid);
+  }
+  return [cells[ck], 0, 0];
+}
 function whiteOf(img) {
   const c = canvasOf(img.width, img.height), x = c.getContext('2d');
   x.drawImage(img, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
   return c;
 }
-async function loadAssets() {
-  for (const [k, a] of Object.entries(ASSETS)) {
-    const img = await loadImg(a.img), imgR = await loadImg(a.imgR);
-    SPR[k] = { img, white: whiteOf(img), imgR, whiteR: whiteOf(imgR), anims: a.anims, cols: a.cols };
+async function loadAssets(progress = () => { }) {
+  const list = Object.entries(ASSETS), n = list.length + 1;
+  for (const [i, [k, a]] of list.entries()) {
+    const nm = ((CHARS[k] && CHARS[k].name) || k).replace(/\b\w+/g, w => w[0] + w.slice(1).toLowerCase());
+    progress(i / n, 'Loading ' + nm);
+    await new Promise(r => setTimeout(r, 0));   // let the loading bar draw
+    const img = await loadImg(a.img, nm + "'s sprites"), imgR = await loadImg(a.imgR, nm + "'s sprites");
+    try { SPR[k] = { img, white: whiteOf(img), imgR, whiteR: whiteOf(imgR), anims: a.anims, cols: a.cols }; }
+    catch (e) { throw new Error("Couldn't prepare " + nm + "'s sprites (" + (e.message || e) + ')'); }
     SPR[k].pal = { 0: { img, imgR } };
   }
+  progress((n - 1) / n, 'Building stages'); await new Promise(r => setTimeout(r, 0));
   buildStages();
+  progress(1, 'Ready');
 }
 
 // ------------------------------------------------------------------ sprites
@@ -174,14 +213,13 @@ function frameOf(p) {
 function drawSpr(cid, variant, anim, fi, x, y, facing, scale = SC, kx = 1, ky = 1, lean = 0) {
   const S = SPR[cid], a = S.anims[anim]; if (!a) return;
   const idx = a[0] + Math.min(fi, a[1] - 1);
-  const sx = (idx % S.cols) * 64, sy = Math.floor(idx / S.cols) * 64;
   ctx.save(); ctx.translate(Math.round(x), Math.round(y));
   if (lean) ctx.transform(1, 0, -lean * facing, 1, 0, 0);
   ctx.scale((facing === 1 ? -1 : 1) * kx, ky);
   const s = 64 * scale;
   // facing right = mirrored sprite with the "r" detail layer (asymmetric hair/accessories)
   // variant: a palette number, 'shadow' or 'white'
-  const src = variant === 'white' ? (facing === 1 ? S.whiteR : S.white) : palSheet(cid, variant || 0, facing === 1);
+  const [src, sx, sy] = variant === 'white' ? [facing === 1 ? S.whiteR : S.white, (idx % S.cols) * 64, Math.floor(idx / S.cols) * 64] : palSrc(cid, variant || 0, facing === 1, idx);
   ctx.drawImage(src, sx, sy, 64, 64, -s / 2, -s, s, s);
   ctx.restore();
 }
@@ -563,12 +601,13 @@ function renderGame() {
   for (const q of G.projs) drawProj(q, left);
   drawFx(left);
   drawStageFront(G.cam);
-  if (G.showBoxes) drawBoxes(left);
+  if (G.showBoxes && G.mode !== 'online') drawBoxes(left);   // never in an online match
   for (const t of G.texts) {
     const k = t.t / t.life; ctx.globalAlpha = k > 0.7 ? (1 - k) / 0.3 : 1;
     txt(t.txt, t.x - left, t.y - t.t * 0.6, t.size, t.color); ctx.globalAlpha = 1;
   }
   baseT();
+  if (UI.screen === 'replay' && RP.hide === 2) return;   // clean view for clips: no HUD at all
   drawHUD();
   if (G.mode === 'training') { if (TUT.on) drawTutHUD(); else { if (!TR.on) drawTrainingHUD(); drawInputDisplay(); drawFrameMeter(); drawTrialHUD(); } }
   if (G.phase === 'intro') drawRoundIntro();

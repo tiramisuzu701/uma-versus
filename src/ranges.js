@@ -21,11 +21,11 @@ const COMBO_RANGE = {
   },
   gs: {
     "2L 2L 2L 214M": {"r":110,"rx":110,"rc":110,"dmg":997,"dmgx":997,"ex":false},
-    "5M dc dL 5H": {"r":170,"rx":170,"rc":180,"dmg":1804,"dmgx":1804,"ex":false},
+    "5M dc dL 5H": {"r":0,"rx":0,"rc":0,"dmg":0,"dmgx":0,"ex":false},
     "5L 5M 5H 623M": {"r":120,"rx":120,"rc":120,"dmg":2047,"dmgx":2047,"ex":false},
     "2M 2H jc j.M j.H": {"r":110,"rx":110,"rc":110,"dmg":2524,"dmgx":2524,"ex":false},
-    "5M dc dL 5M dc dL 5H": {"r":170,"rx":170,"rc":180,"dmg":2273,"dmgx":2273,"ex":false},
-    "5L 5M 5H 623H , 5H 623M": {"r":0,"rx":80,"rc":80,"dmg":0,"dmgx":3077,"ex":true},
+    "5M dc dL 5M dc dL 5H": {"r":0,"rx":0,"rc":0,"dmg":0,"dmgx":0,"ex":false},
+    "5L 5M 5H 623H , 5H 214M": {"r":0,"rx":80,"rc":80,"dmg":0,"dmgx":2658,"ex":true},
   },
   vo: {
     "2L 2M 236M": {"r":120,"rx":120,"rc":120,"dmg":1471,"dmgx":1471,"ex":false},
@@ -89,7 +89,7 @@ const COMBO_RANGE = {
     "2L 2M 214M": {"r":120,"rx":120,"rc":120,"dmg":1192,"dmgx":1192,"ex":false},
     "2M 2H jc j.M j.H": {"r":110,"rx":110,"rc":110,"dmg":2524,"dmgx":2524,"ex":false},
     "5M 5H 623M": {"r":150,"rx":150,"rc":160,"dmg":1985,"dmgx":1985,"ex":false},
-    "5M 236M , 5M 5H": {"r":130,"rx":130,"rc":140,"dmg":2530,"dmgx":2530,"ex":false},
+    "2M 5H 214H": {"r":200,"rx":200,"rc":200,"dmg":1739,"dmgx":1582,"ex":true},
     "2M 2H jc j.M j.H 2H 623M": {"r":100,"rx":100,"rc":100,"dmg":3435,"dmgx":3435,"ex":false},
   },
   df: {

@@ -6,6 +6,7 @@ ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # repo r
 for _d in ('build/wiki', 'build/shots/ui', 'build/shots/fx'): _os.makedirs(_os.path.join(ROOT, _d), exist_ok=True)
 import json, html, base64, io
 from PIL import Image
+import sys, os; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import wiki_doc
 
 src = open(ROOT+'/tools/wiki_content.py').read()
 exec(src)          # D, CB, BUILD, ORDER, ARCH, CHAR, SYSTEMS, UPDATE15, UPDATE, helpers
@@ -97,14 +98,14 @@ NORMAL_DESC = {
   'dM': 'Long dash lunge. →→ + M.',
   'dH': 'Leaping overhead kick that knocks down. →→ + H.',
   'throw': 'L + M up close, hold back to throw the other way. Beats blocking. Tech with L + M.',
-  'GC': 'S + H while blocking, 50 Spurt. Invincible and knocks them away.',
+  'GC': 'Counter Spurt button while blocking, 50 Spurt, 3 s cooldown. Invincible and knocks them away.',
 }
 EXTRA = {('vo', 'jL'): 'Also hits behind her, so it crosses up.', ('vo', 'jM'): "Wide hitbox that hits behind her. Vodka's main cross-up.",
-         ('gs', '2L'): 'Chains into itself.', ('gs', '5L'): 'Plus on block. Her pressure starts here.',
+         ('gs', '2L'): 'Chains into itself, up to twice per string.', ('gs', '5L'): 'Plus on block. Her pressure starts here.',
          ('ds', '5M'): 'Very long for a medium.', ('mm', '5M'): 'One of the longest pokes in the game.',
          ('suz', '5M'): 'Good reach and quick startup.'}
 NAMES = {**NORMAL_NAMES, '2M': 'Crouching M', '2H': 'Crouching H', '6M': 'Hop Overhead', 'throw': 'Throw', 'GC': 'Counter Spurt'}
-NOTATION = {'throw': 'L+M', 'GC': 'S+H (blocking)', '6M': '6M', 'dL': '66L', 'dM': '66M', 'dH': '66H', 'jL': 'j.L', 'jM': 'j.M', 'jH': 'j.H'}
+NOTATION = {'throw': 'L+M', 'GC': 'while blocking', '6M': '6M', 'dL': '66L', 'dM': '66M', 'dH': '66H', 'jL': 'j.L', 'jM': 'j.M', 'jH': 'j.H'}
 
 LEAD = {}
 def props(cid, mid, f, m):
@@ -121,6 +122,19 @@ def props(cid, mid, f, m):
     if f['projs'] and not m.get('trap'): out.append('Projectile.')
     if m.get('trap'): out.append('Leaves a potion on the floor: it arms, then goes off when stepped on, on a timer, or with Catalyst. Any hit or projectile pops it.')
     return out
+
+def doc_notes(bullets, gen):
+    """hand-written bullets from the doc, then the generated lines they don't already say"""
+    said = ' '.join(b.lower() for b in bullets if not b.startswith('EX'))
+    keep = []
+    for g in gen:
+        gl = g.lower()
+        if gl.startswith('hard knockdown') and 'hard knockdown' in said: continue
+        if gl == 'knocks down.' and 'knock' in said: continue
+        if gl == 'projectile.' and 'projectile' in said: continue
+        if gl.startswith('catches strikes') and 'catches strikes' in said: continue
+        keep.append(E(g))
+    return [wiki_doc.inline(b) for b in bullets] + keep
 
 # ------------------------------------------------------------------ html pieces
 def advc(v, m, kind): return adv(v, m, kind)
@@ -152,12 +166,14 @@ def figure(cid, mid, alt):
 
 def move_card(cid, mid, mv):
     m = mv[mid]; f = FR[cid]['moves'].get(mid, {})
-    desc = [NORMAL_DESC.get(mid, '')] + ([EXTRA[(cid, mid)]] if (cid, mid) in EXTRA else []) + props(cid, mid, f, m)
+    doc = wiki_doc.get(cid)
+    if doc: desc = doc_notes(doc['normals'].get(mid, []), props(cid, mid, f, m))
+    else: desc = [E(x) for x in [NORMAL_DESC.get(mid, '')] + ([EXTRA[(cid, mid)]] if (cid, mid) in EXTRA else []) + props(cid, mid, f, m) if x]
     return f"""<article class="move" id="{cid}.{mid}">
   <header class="mhead"><h4>{E(NAMES.get(mid, mid))}</h4><span class="minput">{E(NOTATION.get(mid, mid))}</span></header>
   <div class="mbody">{figure(cid, mid, NAMES.get(mid, mid))}
     <div class="mdata"><div class="tw"><table class="mft"><thead>{HEAD.format('')}</thead><tbody>{data_row(cid, m, None, f)}</tbody></table></div>
-    <ul class="mnotes">{''.join(f'<li>{E(x)}</li>' for x in desc if x)}</ul></div></div></article>"""
+    <ul class="mnotes">{''.join(f'<li>{x}</li>' for x in desc if x)}</ul></div></div></article>"""
 
 def skill_card(cid, m, mv):
     rows, notes = '', []
@@ -166,18 +182,25 @@ def skill_card(cid, m, mv):
         if vid in mv: rows += data_row(cid, mv[vid], f'<span class="ver">{lab}</span>', FR[cid]['moves'].get(vid))
     for fm in D['chars'][cid]['moves']:
         if fm['followOf'] == m['id']: rows += data_row(cid, fm, '› ' + E(fm['name']), FR[cid]['moves'].get(fm['id']))
-    if m['note']: notes.append(m['note'] + '.')
-    if m['vnote']: notes.append(m['vnote'].replace(' · ', ', ') + '.')
-    if m['exNote']: notes.append('EX: ' + m['exNote'] + '.')
-    if m['fnote']: notes.append(m['fnote'][0].upper() + m['fnote'][1:].replace(' · ', ', ') + '.')
-    notes += props(cid, m['id'], FR[cid]['moves'].get(m['id'], {}), m)
-    if m['input']: notes.append(f'Shortcut: {m["input"]} (M version, with a cooldown and 10% less damage).')
+    doc = wiki_doc.get(cid)
+    if doc and m['name'] in doc['skills']:
+        gen = props(cid, m['id'], FR[cid]['moves'].get(m['id'], {}), m)
+        if m['input']: gen.append(f'Shortcut: {m["input"]} (M version, with a cooldown and 10% less damage).')
+        notes = doc_notes(doc['skills'][m['name']], gen)
+    else:
+        if m['note']: notes.append(m['note'] + '.')
+        if m['vnote']: notes.append(m['vnote'].replace(' · ', ', ') + '.')
+        if m['exNote']: notes.append('EX: ' + m['exNote'] + '.')
+        if m['fnote']: notes.append(m['fnote'][0].upper() + m['fnote'][1:].replace(' · ', ', ') + '.')
+        notes += props(cid, m['id'], FR[cid]['moves'].get(m['id'], {}), m)
+        if m['input']: notes.append(f'Shortcut: {m["input"]} (M version, with a cooldown and 10% less damage).')
+        notes = [E(x) for x in notes]
     inp = arrows(m['motion']) + ' + L / M / H'
     return f"""<article class="move skill" id="{cid}.{m['id']}">
   <header class="mhead"><h4>{E(m['name'])}</h4><span class="minput">{m['motion']}X <span class="arw">{inp}</span></span></header>
   <div class="mbody">{figure(cid, m['id'], m['name'])}
     <div class="mdata"><div class="tw"><table class="mft"><thead>{HEAD.format('<th>Version</th>')}</thead><tbody>{rows}</tbody></table></div>
-    <ul class="mnotes">{''.join(f'<li>{E(x)}</li>' for x in notes)}</ul></div></div></article>"""
+    <ul class="mnotes">{''.join(f'<li>{x}</li>' for x in notes)}</ul></div></div></article>"""
 
 def super_card(cid, mv):
     m = mv.get('SU')
@@ -186,8 +209,10 @@ def super_card(cid, mv):
   <header class="mhead"><h4>{E(m['name'])}</h4><span class="minput">S+H</span></header>
   <div class="mbody">{figure(cid, 'SU', m['name'])}
     <div class="mdata"><div class="tw"><table class="mft"><thead>{HEAD.format('')}</thead><tbody>{data_row(cid, m, None, FR[cid]['moves'].get('SU'))}</tbody></table></div>
-    <ul class="mnotes">{''.join(f'<li>{x}</li>' for x in super_notes(cid, m))}</ul></div></div></article>"""
+    {('<ul class="mnotes">' + ''.join(f'<li>{x}</li>' for x in super_notes(cid, m)) + '</ul>') if super_notes(cid, m) else ''}</div></div></article>"""
 def super_notes(cid, m):
+    doc = wiki_doc.get(cid)
+    if doc: return [wiki_doc.inline(b) for b in doc['super']]
     if m.get('shots'):
         return ['Full Spurt gauge (100). Invincible on frames 1–20.',
                 f'A volley of {m["shots"] - 1} golden roses and one big finishing rose. Each shot is its own projectile, so they can hit, get blocked or miss separately.',
@@ -208,13 +233,13 @@ def char_page(cid, idx):
     arch_t, arch_d = ARCH[c['arch']]
     traits = []
     if c['flags']['airDash']: traits.append('Air dash')
-    if c['flags']['lightChain']: traits.append('2L chains into itself')
-    if c['flags']['dashCancel']: traits.append('Dash cancel (10 Spurt)')
+    if c['flags']['lightChain']: traits.append('2L chains into itself (twice per string)')
+    if c['flags']['dashCancel']: traits.append('Dash cancel (50 Spurt)')
     if c['flags']['projMax'] > 1: traits.append(f"Up to {c['flags']['projMax']} potions out" if c['arch'] == 'SET-PLAY' else f"{c['flags']['projMax']} projectiles on screen")
     if c['flags'].get('puppet'): traits.append('Puppet: her skills command the Friend')
     if c['arch'] == 'GRAPPLER': traits.append('Three command grabs, grab super')
     if c['flags'].get('punisher'): traits.append('Punish: +20% on recovering foes')
-    if c['flags'].get('specialChain'): traits.append('Special chain on hit')
+    if c['flags'].get('specialChain') or c['flags'].get('puppet'): traits.append('Special chain on hit')
     if c['flags'].get('lowHpBoost'): traits.append('Miracle Mode below 30% HP')
     if c['backdash']: traits.append('Long backdash' if c['backdash']['total'] >= 22 else 'Quick backdash')
     infobox = f"""<aside class="infobox" style="--char:{col}">
@@ -232,7 +257,22 @@ def char_page(cid, idx):
     groups = [('Standing', ['5L', '5M', '5H']), ('Crouching', ['2L', '2M', '2H']), ('Jumping', ['jL', 'jM', 'jH']),
               ('Command and dash attacks', ['6M', 'dL', 'dM', 'dH']), ('Universal', ['throw', 'GC'])]
     normals = ''.join(f'<h3 id="{cid}.g{i}">{g}</h3>' + ''.join(move_card(cid, k, mv) for k in ks if k in mv) for i, (g, ks) in enumerate(groups))
-    combos = ''.join(f"""<tr><td class="cseq">{notation(cb['seq'])}</td><td class="num">{cb['dmg']:,}</td><td class="num">{cb['hits']}</td><td>{'★ ' if cb.get('level', 1) > 1 else ''}{E(cb['name'])}{' (corner)' if cb.get('corner') else ''}: {E(cb['note'])}</td></tr>""" for cb in CB[cid])
+    doc = wiki_doc.get(cid)
+    dcb = doc['combos'] if doc and len(doc['combos']) == len(CB[cid]) else None
+    def cnote(i, cb):
+        if dcb: return wiki_doc.inline(dcb[i][1])
+        return f"{'★ ' if cb.get('level', 1) > 1 else ''}{E(cb['name'])}{' (corner)' if cb.get('corner') else ''}: {E(cb['note'])}"
+    combos = ''.join(f"""<tr><td class="cseq">{notation(cb['seq'])}</td><td class="num">{cb['dmg']:,}</td><td class="num">{cb['hits']}</td><td>{cnote(i, cb)}</td></tr>""" for i, cb in enumerate(CB[cid]))
+    if doc:
+        lead = wiki_doc.inline(wiki_doc.clean(doc['lead']).replace('*', '')).replace(E(nm(cid)), f'<b>{E(nm(cid))}</b>', 1)
+        over = (f'<p class="archline"><b>{E(doc["tagline"])}</b> {wiki_doc.inline(doc["over"])}</p>' if doc['tagline'] else '') + ''.join(f'<p>{wiki_doc.inline(p)}</p>' for p in doc['plan'])
+        strong = [wiki_doc.inline(x) for x in doc['strong']]; weak = [wiki_doc.inline(x) for x in doc['weak']]; tips = [wiki_doc.inline(x) for x in doc['tips']]
+        sk_intro = f'<p class="note">{wiki_doc.inline(doc["skill_intro"])}</p>' if doc['skill_intro'] else ''
+    else:
+        lead = f"<b>{E(nm(cid))}</b> is the {E(archname(c['arch']).lower())} of the cast. {E(LEAD.get(cid) or c['blurb'].split('. ', 1)[1])}"
+        over = f'<p class="archline"><b>{E(archname(c["arch"]))}: {E(arch_t)}.</b> {E(arch_d)}</p>' + ''.join(f'<p>{E(p)}</p>' for p in t['plan'])
+        strong = [E(x) for x in t['strong']]; weak = [E(x) for x in t['weak']]; tips = [E(x) for x in t['tips']]
+        sk_intro = '<p class="note">Skills named <i>Friend:</i> are carried out by Sunday Silence. Cafe can\'t act until the Friend\'s attack ends, so On-Block shows when Cafe is free. If the Friend is hit while she attacks, she\'s gone for 4 seconds.</p>' if cid == 'mc' else ''
     toc = [('overview', 'Overview'), ('normals', 'Normal moves'), ('skills', 'Skills'), ('super', 'Super'), ('combos', 'Combos'), ('tips', 'Tips')]
     return f"""
 <section class="view char" id="v-{cid}" data-view="{cid}" style="--char:{col}" hidden>
@@ -240,26 +280,25 @@ def char_page(cid, idx):
   <h1 class="ptitle">{E(nm(cid))}</h1>
   <p class="tagline">From Uma Versus Wiki · build {BUILD}</p>
   {infobox}
-  <p class="lead"><b>{E(nm(cid))}</b> is the {E(archname(c['arch']).lower())} of the cast. {E(LEAD.get(cid) or c['blurb'].split('. ', 1)[1])}</p>
+  <p class="lead">{lead}</p>
   <nav class="toc" aria-label="Contents"><p class="toch">Contents</p><ol>{''.join(f'<li><a href="#{cid}.{a}">{b}</a></li>' for a, b in toc)}</ol></nav>
   <h2 id="{cid}.overview">Overview</h2>
-  <p class="archline"><b>{E(archname(c['arch']))}: {E(arch_t)}.</b> {E(arch_d)}</p>
-  {''.join(f'<p>{E(p)}</p>' for p in t['plan'])}
-  <div class="sw"><div class="pro"><p class="swh">Strengths</p><ul>{''.join(f'<li>{E(x)}</li>' for x in t['strong'])}</ul></div>
-    <div class="con"><p class="swh">Weaknesses</p><ul>{''.join(f'<li>{E(x)}</li>' for x in t['weak'])}</ul></div></div>
+  {over}
+  <div class="sw"><div class="pro"><p class="swh">Strengths</p><ul>{''.join(f'<li>{x}</li>' for x in strong)}</ul></div>
+    <div class="con"><p class="swh">Weaknesses</p><ul>{''.join(f'<li>{x}</li>' for x in weak)}</ul></div></div>
   <h2 id="{cid}.normals">Normal moves</h2>
   <p class="note">Images show the first active frame, with <span class="k hi"></span> hitboxes and the <span class="k hu"></span> hurtbox (<span class="k gr"></span> is throw range). Frame data is taken from the game at close range. <b>*</b> Air attacks and hops: the best case, hitting as low as possible right before landing. Hit higher and they're less plus.</p>
   {normals}
   <h2 id="{cid}.skills">Skills</h2>
   <p class="note">Motion + L or M for the free versions, + H for EX (50 Spurt). Images show the M version. <b>*</b> = best case for air moves (hitting as low as possible).</p>
-  {'<p class="note">Skills named <i>Friend:</i> are carried out by Sunday Silence. Cafe recovers long before the attack ends, so recovery is shown as −. If the Friend is hit while she attacks, she\'s gone for 4 seconds.</p>' if cid == 'mc' else ''}
+  {sk_intro}
   {''.join(skill_card(cid, m, mv) for m in skills)}
   <h2 id="{cid}.super">Super</h2>
   {super_card(cid, mv)}
   <h2 id="{cid}.combos">Combos</h2>
   <p class="note">The same combos as the Combo Trials mode (★ = advanced). Damage is with scaling, on build {BUILD}.</p>
   <div class="tw"><table class="ctab"><thead><tr><th>Combo</th><th>Damage</th><th>Hits</th><th>Notes</th></tr></thead><tbody>{combos}</tbody></table></div>
-  <h2 id="{cid}.tips">Tips</h2><ul>{''.join(f'<li>{E(x)}</li>' for x in t['tips'])}</ul>
+  <h2 id="{cid}.tips">Tips</h2><ul>{''.join(f'<li>{x}</li>' for x in tips)}</ul>
 </section>"""
 
 SOCIAL = [('Discord', 'https://discord.gg/gUgfWuWhQh'), ('YouTube', 'https://www.youtube.com/@UmaVersus'), ('TikTok', 'https://www.tiktok.com/@uma.versus')]
@@ -285,8 +324,6 @@ HOME2 = f"""
   <div class="welcome"><p>The wiki for <b>Uma Versus</b>, a fan-made Umamusume fighting game you play in the browser.</p><p>Community: {' · '.join(f'<a href="{u}" target="_blank" rel="noopener">{n}</a>' for n, u in SOCIAL)}</p></div>
   <h2>Characters</h2>
   <div class="roster">{roster2}</div>
-  <h2>Archetypes</h2>
-  <div class="tw"><table class="atab"><thead><tr><th>Archetype</th><th>Plays like</th><th>Characters</th></tr></thead><tbody>{archrows}</tbody></table></div>
   <h2>Getting started</h2>
   <ul><li><a href="#systems" data-go="systems">How to play</a>: controls, notation, defense and combos</li><li><a href="#stages" data-go="stages">Stages</a></li><li><a href="#update2" data-go="update2">Latest patch notes (Update 2)</a></li></ul>
 </section>"""
@@ -441,8 +478,37 @@ STAGESV = f"""
 UPDATE2 = f"""
 <section class="view" id="v-update2" data-view="update2" hidden>
   <h1 class="ptitle">Update 2</h1>
-  <p class="tagline">Patch notes · Update 2.0.0 · build {BUILD}</p>
+  <p class="tagline">Patch notes · Update 2.0.1 · build {BUILD}</p>
   <div class="prose">
+  <h2>2.0.1</h2>
+  <ul>
+  <li>Fixed Teio’s Miracle Leap and Vodka’s Drift Hop not coming out from their motion inputs</li>
+  <li>Walking back into 236  is no longer read as a half circle, and DP inputs are more forgiving</li>
+  <li>More IPS: Skills can only be hit twice per combo, while normals are capped at four</li>
+  <li>Counter Spurt now has its own button (V / ; / LT). 3-second cooldown</li>
+  <li>Counter Spurt command-grab break window increased</li>
+  <li>Throw techs now push both players apart properly</li>
+  <li>Mashing throw tech during hitstun or blockstun now locks tech out briefly</li>
+  <li>Spurt gain reduced to 80% of its old speed</li>
+  <li>Fixed being disconnected when the other player minimizes or switches tabs</li>
+  <li>Added “Copy connection log” to the Online panel<ul><li>To move forward with the netcode and figure out fixes/improvements</li></ul></li>
+  <li>Added a load screen to the main menu, if you have issues loading, the game should tell you why and some quick solutions to fix it</li>
+  <li>Projectiles now disappear when the owner is hit</li>
+  <li>Added a filter to account names so you can’t use like, a slur in your account name (safety precautions)</li>
+  <li>Skills done with their motion input now have a very short cooldown before the same skill can be used again</li>
+  <li>Fixed Kitasan Black’s EX Festival Drum crossing from up close</li>
+  <li>Matches against Guests now count towards leaderboards</li>
+  <li>Added Practice while you wait in rooms</li>
+  <li>More Training options: Spurt and health settings for you and the dummy, and more</li>
+  <li>You can now hide the replay overlay with H / LT (3 settings)</li>
+  <li>Gold Ship’s 2L can now only chain into itself twice per string</li>
+  <li>Gold Ship dash cancel now costs 50 Spurt (previously 10)</li>
+  <li>Gold Ship can’t attack for the first 10 frames after dash cancel</li>
+  <li>Barrage is less plus on block (L +5 → +2, M +3 → +0)</li>
+  <li>Golshi Mode adds +1 blockstun instead of +2</li>
+  <li>Manhattan Cafe can no longer act while Sunday Silence is attacking.</li>
+  </ul>
+  <h2>2.0.0</h2>
   <p class="lead"><b>Update 2.0.0 is out!</b></p>
   <p>Four new characters bring the roster to twelve total, plus Arcade mode, a Tutorial, color palettes, a freshened-up UI, and a lot more for online.</p>
   <h2>New runners</h2>

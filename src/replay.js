@@ -87,7 +87,7 @@ let toastMsg = '', toastT = 0;
 function toast(s) { toastMsg = s; toastT = 180; }
 
 // ------------------------------------------------------------------ playback
-const RP = { rep: null, frames: null, idx: 0, speed: 1, paused: false, acc: 0, snaps: {}, n: 0, warn: '' };
+const RP = { rep: null, frames: null, idx: 0, speed: 1, paused: false, acc: 0, snaps: {}, n: 0, warn: '', hide: 0, hideT: 0 };
 const SPEEDS = [0.25, 0.5, 1, 2, 4];
 function playReplay(r, anyway) {
   if (!CHARS[r.c[0]] || !CHARS[r.c[1]]) { toast('This replay uses a character this version doesn\'t have'); return; }
@@ -137,6 +137,8 @@ function replayTick(e, edges, esc) {
   if (has('Period') || e.M) { RP.paused = true; replayStep(); }
   if (has('Backquote') || has('Digit3')) G.showBoxes = !G.showBoxes;
   if (has('KeyD')) downloadReplay(RP.rep);
+  // H (or LT / the Counter Spurt button) cycles: everything shown · replay controls hidden · clean view (no HUD)
+  if (has('KeyH') || e.C) { RP.hide = ((RP.hide || 0) + 1) % 3; RP.hideT = 0; }
   if (RP.paused) return;
   RP.acc += RP.speed;
   while (RP.acc >= 1) { RP.acc--; if (!replayStep()) { RP.paused = true; break; } }

@@ -42,7 +42,7 @@ function baseNormals(o) {
       hits: [H({ f: [8, 12], box: [25, -102, 100, 36], dmg: 750, hs: 19, bs: 12, lvl: 2, push: 8 })] },
     'dH': { kind: 'normal', str: 3, name: 'Flying Kick', air: true, noChain: true, seq: [[0, 6, '160'], [3, 40, '163']], vel: [[1, 1, 8, -9]], landRec: 12,
       hits: [H({ f: [10, 40], box: [10, -95, 82, 72], dmg: 1050, hs: 22, bs: 14, lvl: 3, guard: 'high', kd: true, launch: [4, -6] })] },
-    // Guard cancel: S+H while blocking, costs 50 Spurt. Invincible push-away.
+    // Guard cancel: the Counter Spurt button (C) while blocking, costs 50 Spurt. Invincible push-away.
     'GC': { kind: 'gc', anim: '330', seq: [[0, 4], [1, 4], [2, 6], [0, 18, '800']], inv: [1, 16],
       hits: [H({ f: [7, 12], box: [-10, -150, 115, 150], dmg: 300, hs: 20, bs: 16, lvl: 2, kd: true, launch: [9, -6], push: 10 })] },
     ...o,
@@ -280,7 +280,7 @@ const CHARS = {
     },
     combos: [
       { name: 'Jab loop', seq: '2L 2L 2L 214M', note: 'Crouching jabs chain into themselves, then Barrage' },
-      { name: 'Dash cancel', seq: '5M dc dL 5H', note: '→→ during 5M (10 Spurt), dash jab, heavy' },
+      { name: 'Dash cancel', seq: '5M dc dL 5H', note: '→→ during 5M (50 Spurt), dash jab, heavy' },
       { name: 'Dropkick ender', seq: '5L 5M 5H 623M', note: 'Golshi Dropkick!! for big damage' },
       { name: 'Launcher air combo', seq: '2M 2H jc j.M j.H', note: 'Jump-cancel the launcher' },
     ],
@@ -297,7 +297,7 @@ const CHARS = {
       'dL': { kind: 'normal', str: 1, name: 'Dash Jab', seq: [[0, 2, '900'], [1, 2, '900'], [0, 3, '820'], [1, 11, '820']], vel: [[1, 7, 9.5]],
         hits: [H({ f: [5, 7], box: [20, -104, 80, 32], dmg: 380, hs: 15, bs: 11, lvl: 1, push: 5 })] },
       '5S': { kind: 'special', name: 'Golshi Rush', input: 'S', motion: '236', cd: 120, note: 'Command dash', vnote: 'L short · M long',
-        fnote: 'during the dash: L low slide · M overhead · H grab · S stop',
+        fnote: 'during the dash: L low slide · M overhead · H grab · S stop (50 Spurt, like a dash cancel)',
         seq: [[0, 3, '102'], [1, 3, '102'], [2, 3, '102'], [3, 3, '102'], [4, 3, '102'], [5, 3, '102'], [0, 3, '102'], [1, 3, '102'], [0, 8, '800']],
         vel: [[2, 24, 10]], follow: { win: [6, 24], L: '5S~L', M: '5S~M', H: '5S~H', S: 'stop' },
         v: { L: { vel: [[2, 14, 9]], follow: { win: [5, 15], L: '5S~L', M: '5S~M', H: '5S~H', S: 'stop' },
@@ -314,11 +314,11 @@ const CHARS = {
         ...dropkick(1.1, 1),
         v: { L: dropkick(0.7, 0.85) },
         ex: { note: '2-hit armor, wall bounce', armor: [1, 18], armorHits: 2, dmgMul: 1.3, hit: { launch: [8, -10], wb: true } } },
-      '2S': { kind: 'special', name: 'Barrage', input: '↓ + S', motion: '214', cd: 150, note: 'Rapid jabs, plus on block', vnote: 'L 3 jabs (+5) · M 4 jabs (+3)',
-        ...barrage(4, 1, 12),
-        v: { L: barrage(3, 0.9, 14) },
-        ex: { note: '8 jabs, very plus on block', ...barrage(8, 1, 16), dmgMul: 1.1 } },
-      '6S': { kind: 'special', name: 'Golshi Mode', input: '→ + S', motion: '41236', cd: 600, cdAlways: true, note: 'Buff 6s: faster, +2 blockstun, +8% dmg (10s cooldown)',
+      '2S': { kind: 'special', name: 'Barrage', input: '↓ + S', motion: '214', cd: 150, note: 'Rapid jabs, plus on block', vnote: 'L 3 jabs (+2) · M 4 jabs (+0)',
+        ...barrage(4, 1, 9),
+        v: { L: barrage(3, 0.9, 11) },
+        ex: { note: '8 jabs, very plus on block', ...barrage(8, 1, 14), dmgMul: 1.1 } },
+      '6S': { kind: 'special', name: 'Golshi Mode', input: '→ + S', motion: '41236', cd: 600, cdAlways: true, note: 'Buff 6s: faster, +1 blockstun, +8% dmg (10s cooldown)',
         seq: [[0, 6, '202'], [1, 6, '202'], [2, 10, '202'], [0, 8, '203']], ev: { 14: 'gold' },
         ex: { note: 'Instant, lasts 10s', seq: [[0, 3, '202'], [2, 6, '202']], ev: { 4: 'goldEx' } } },
       'jS': { kind: 'special', name: 'Sky Dropkick', input: 'S in the air', motion: '236', cd: 120, note: 'Diving dropkick, overhead', vnote: 'L shallow · M steep',
@@ -577,7 +577,7 @@ const CHARS = {
               vel: [[1, 25, 3]],
               hits: [4, 7, 10, 13, 16, 19, 22].map(f => H({ f: [f, f + 1], box: [20, -112, 88, 45], dmg: 200, hs: 18, bs: 12, lvl: 1, push: 1 }))
                 .concat([H({ f: [26, 30], box: [5, -190, 92, 170], dmg: 560, hs: 24, bs: 14, lvl: 2, kd: true, launch: [1, -14], push: 1, chip: 0.1 })]) } },
-      '4S': { kind: 'special', name: 'Emperor\'s Rise', input: '← + S', motion: '623', cd: 200, note: 'Uppercut, beats jump-ins, NOT invincible', vnote: 'L recovers faster',
+      '4S': { kind: 'special', name: 'Emperor\'s Rise', input: '← + S', motion: '623', cd: 200, note: 'Uppercut, beats jump-ins, NOT invincible', vnote: 'L comes out faster',
         seq: [[0, 3, '995'], [0, 4, '993'], [1, 8, '993'], [1, 20, '993']], aaInv: [3, 14],
         hits: [H({ f: [7, 13], box: [0, -215, 80, 205], dmg: 1000, hs: 26, bs: 16, lvl: 3, kd: true, launch: [2, -14], chip: 0.1 })],
         v: { L: { dmgMul: 0.8, seq: [[0, 3, '995'], [0, 4, '993'], [1, 8, '993'], [1, 13, '993']] } },
@@ -752,7 +752,7 @@ const CHARS = {
       '6S': { kind: 'special', name: 'Catalyst', input: '→ + S', motion: '41236', cd: 60, note: 'Sets off every potion she has out, right now',
         seq: [[0, 4, '202'], [1, 4, '202'], [2, 12, '202']], ev: { 5: 'detonate' },
         ex: { note: 'Invincible while she does it', inv: [1, 12] } },
-      '4S': { kind: 'special', name: 'Overdose Spark', input: '← + S', motion: '623', cd: 220, note: 'Beats jump-ins, NOT invincible', vnote: 'L recovers faster',
+      '4S': { kind: 'special', name: 'Overdose Spark', input: '← + S', motion: '623', cd: 220, note: 'Beats jump-ins, NOT invincible', vnote: 'L comes out faster',
         seq: [[0, 3, '840'], [1, 3, '840'], [2, 6, '840'], [1, 22, '880']], aaInv: [3, 13],
         hits: [H({ f: [5, 12], box: [0, -200, 78, 196], dmg: 950, hs: 26, bs: 16, lvl: 3, kd: true, launch: [3, -13], chip: 0.1 })],
         v: { L: { dmgMul: 0.8, seq: [[0, 3, '840'], [1, 3, '840'], [2, 6, '840'], [1, 15, '880']] } },
@@ -772,7 +772,7 @@ const CHARS = {
   // Her skills don't attack: they send her Friend (Sunday Silence) to attack while Cafe stays free to act.
   mc: {
     name: 'MANHATTAN CAFE', short: 'CAF', arch: 'PUPPET', color: '#6b4fa8', color2: '#f3e6a0',
-    blurb: 'Puppet. Her skills send her Friend to attack, so she can pressure from two places at once.',
+    blurb: 'Puppet. Her skills send her Friend to attack from across the screen, but Cafe can\'t act until the Friend is done.',
     hp: 9500, walk: 3.0, back: 2.8, dash: 8.6, jumpV: -15, jumpX: 4.3, grav: 0.76, puppet: true,
     throwAnim: '840', win: '600', winFrames: 8, intro: '940', ai: 'puppet',
     look: {
@@ -782,7 +782,7 @@ const CHARS = {
       fx: { 'SU': [{ t: 1, type: 'ring', y: -80, r: 150 }] },
     },
     combos: [
-      { name: 'Friend rush', seq: '5L 5M 236M', note: 'Cancel 5M into Phantom Rush. The Friend hits while Cafe recovers' },
+      { name: 'Friend rush', seq: '5L 5M 236M', note: 'Cancel 5M into Phantom Rush' },
       { name: 'Low sweep', seq: '2L 2M 214M', note: 'The Friend sweeps low in front of Cafe' },
       { name: 'Launcher air combo', seq: '2M 2H jc j.M j.H', note: 'Jump-cancel the launcher' },
       { name: 'Rising shade', seq: '5M 5H 623M', note: 'The Friend launches them from beside Cafe' },
@@ -817,7 +817,7 @@ const CHARS = {
         ex: { note: 'Faster, knocks down', inv: [1, 10],
           pup: { at: 'above', dx: 0, dy: 220, seq: [[0, 6, '161'], [3, 20, '163'], [2, 10, '139']],
             vel: [[1, 6, 0, -1], [7, 26, 0, 15]], hits: [H({ f: [8, 26], box: [-34, -84, 68, 84], dmg: 850, hs: 22, bs: 14, lvl: 3, guard: 'high', kd: true, launch: [3, -8], chip: 0.1 })] } } },
-      '4S': { kind: 'special', name: 'Friend: Rising Shade', input: '← + S', motion: '623', cd: 200, note: 'The Friend uppercuts beside Cafe. Cafe herself is NOT invincible', vnote: 'L recovers faster',
+      '4S': { kind: 'special', name: 'Friend: Rising Shade', input: '← + S', motion: '623', cd: 200, note: 'The Friend uppercuts beside Cafe. Cafe herself is NOT invincible', vnote: 'L comes out faster',
         seq: [[0, 4, '880'], [1, 12, '880']], ev: { 2: 'pup' },
         pup: { at: 'self', dx: 45, seq: [[0, 3, '840'], [1, 3, '840'], [0, 8, '880'], [1, 16, '880']], vel: [[4, 10, 2, -2]],
           hits: [H({ f: [5, 12], box: [-10, -220, 84, 220], dmg: 900, hs: 26, bs: 16, lvl: 3, kd: true, launch: [3, -13], chip: 0.1 })] },
@@ -890,7 +890,7 @@ const CHARS = {
         seq: [[0, 3, '900'], [1, 3, '900'], [2, 3, '900'], [0, 4, '800']], vel: [[1, 9, 11]],
         v: { L: { seq: [[0, 3, '163'], [1, 3, '163'], [1, 3, '163'], [0, 4, '800']], vel: [[1, 9, -10]] } },
         ex: { note: 'Steps right through them to the other side', noPush: [1, 12], inv: [1, 6], vel: [[1, 12, 13]], seq: [[0, 3, '900'], [1, 3, '900'], [2, 3, '900'], [3, 3, '900'], [0, 5, '800']] } },
-      '4S': { kind: 'special', name: 'Fromage Rising', input: '← + S', motion: '623', cd: 220, note: 'Beats jump-ins, NOT invincible', vnote: 'L recovers faster',
+      '4S': { kind: 'special', name: 'Fromage Rising', input: '← + S', motion: '623', cd: 220, note: 'Beats jump-ins, NOT invincible', vnote: 'L comes out faster',
         seq: [[0, 3, '840'], [1, 3, '840'], [2, 6, '840'], [1, 22, '880']], aaInv: [3, 12],
         hits: [H({ f: [5, 12], box: [0, -205, 80, 200], dmg: 980, hs: 26, bs: 16, lvl: 3, kd: true, launch: [3, -13], chip: 0.1 })],
         v: { L: { dmgMul: 0.8, seq: [[0, 3, '840'], [1, 3, '840'], [2, 6, '840'], [1, 15, '880']] } },
@@ -939,7 +939,8 @@ for (const c of Object.values(CHARS)) {
   for (const [k, m] of Object.entries(c.moves)) {
     if (m.ex) c.moves[k + 'X'] = buildEx(m, k);
     if (m.v) for (const b of Object.keys(m.v)) c.moves[k + '.' + b] = buildVariant(m, k, b);
-    if (m.motion) c.techMap[(m.air ? 'a' : 'g') + m.motion] = k;
+    // Air skills are the j-moves; `air: true` on a ground skill only means it leaps.
+    if (m.motion) c.techMap[(k.startsWith('j') ? 'a' : 'g') + m.motion] = k;
   }
 }
 

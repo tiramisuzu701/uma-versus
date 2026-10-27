@@ -14,8 +14,13 @@ let rs = 1;
 const rnd = () => ((rs = (Math.imul(rs, 1664525) + 1013904223) >>> 0) / 4294967296);
 
 const PALETTE_COUNT = 6;   // see PALETTES in render.js
-const NEUTRAL = { u: 0, d: 0, l: 0, r: 0, L: 0, M: 0, H: 0, S: 0 };
-const BTNS = ['L', 'M', 'H', 'S'];
+const NEUTRAL = { u: 0, d: 0, l: 0, r: 0, L: 0, M: 0, H: 0, S: 0, C: 0 };   // C = Counter Spurt button
+const BTNS = ['L', 'M', 'H', 'S', 'C'];
+const METER_GAIN = 0.8;   // 2.0.1: Spurt builds at 80% of the 2.0.0 rate
+const GC_CD = 180;
+const LIGHT_CHAIN_MAX = 2;   // rushdown light chains into 2L: at most 2 per string (3 jabs)
+const DC_LOCK = 10;   // frames after a dash cancel before she can attack or jump   // Counter Spurt cooldown (frames)
+const TECH_LOCK = 20;   // mashing throw tech / grab break while stunned locks both out for this long
 
 // -------------------------------------------------------------------- Fighter
 class Fighter {
@@ -36,19 +41,19 @@ class Fighter {
     this.hs = 0; this.bs = 0; this.crouchBlock = false;
     this.combo = 0; this.jug = 0; this.comboDmg = 0;
     this.inp = { ...NEUTRAL }; this.prev = { ...NEUTRAL };
-    this.buf = { L: 0, M: 0, H: 0, S: 0 };
+    this.buf = { L: 0, M: 0, H: 0, S: 0, C: 0 }; this.gcCd = 0; this.techLock = 0; this.fromNormal = false; this.dcLock = 0;
     this.bufDir = {}; this.bufHist = {};   // direction + motion history captured at each button press
     this.lastFwd = -99; this.lastBack = -99; this.frame = 0;
     this.jx = 0; this.airS = false; this.guts = 0; this.flash = 0;
     this.cs = 0; this.kd = false; this.downT = 0; this.landRec = 4;
     this.throwT = 0; this.throwBack = false; this.ai = null;
     this.trail = [];
-    this.cd = {}; this.hist = []; this.simple = false; this.hardKd = false;
+    this.cd = {}; this.tcd = {}; this.hist = []; this.simple = false; this.hardKd = false;
     this.upBuf = 0; this.dashTap = false; this.bdashTap = false; this.hitOK = false;
     this.walkDir = 0; this.prevState = ''; this.jumpBoost = 1; this.crouchHit = false; this.guarding = false; this.airAct = 0; this.adDir = 0; this.gold = 0; this.throwDmg = 1300; this.noTech = false; this.dashBuf = 0; this.hitLvl = 0; this.adLand = false; this.throwVx = 6; this.dashMin = 0; this.launched = false; this.chainUsed = []; this.miracle = false; this.prorate = 1; this.comboT = 0; this.gbUsed = false; this.wbUsed = false; this.bounce = null; this.limitHit = false; this.throwAnimCur = null;
     if (c.puppet) {   // Manhattan Cafe's Friend (Sunday Silence): a second body, see updatePuppet
       this.pupX = this.x - this.facing * 48; this.pupY = GY; this.pupF = this.facing; this.pupState = 'idle'; this.pupT = 0;
-      this.pupMove = null; this.pupHit = 0; this.pupCd = 0; this.pupSimple = false;
+      this.pupMove = null; this.pupHit = 0; this.pupCd = 0; this.pupSimple = false; this.ipsLog = '';
     }
   }
   get grounded() { return this.y >= GY && !['air', 'airHit', 'airdash'].includes(this.state) && !(this.state === 'attack' && this.move.air); }
@@ -98,7 +103,9 @@ const G = {
   mode: 'versus', p: [], projs: [], fx: [], texts: [], freeze: 0, flashOwner: null, flashT: 0,
   shake: 0, cam: STAGE_W / 2, phase: 'intro', phaseT: 0, round: 1, timer: ROUND_TIME, timerSub: 0,
   slow: 0, adv: null, showBoxes: false, frameCount: 0,
-  training: { dummy: 'stand', block: 'none', meter: true, cpuLevel: 2 },
+  training: { dummy: 'stand', block: 'none', meter: true, cpuLevel: 2,
+    // 2.0.1 options (pause > Training options). meter: false still turns every refill off (used by the tools)
+    p1Spurt: 'full', dummySpurt: 'full', p1Hp: 'refill', dummyHp: 'refill', counter: 'off', tech: 'off', wakeup: 'normal' },
 };
 
 // colour palettes for a match: a mirror match on the same colours gives P2 the next one
@@ -128,6 +135,17 @@ function startRound() {
 
 // ---------------------------------------------------------------- Helpers
 function opp(p) { return G.p[1 - p.side]; }
+// Throw tech / grab break: push both apart by v each. In the 'tech' state vx decays by 0.85 a frame for 18 frames, so
+// v travels about v * 6.4 px. Whatever one side can't travel because of the wall goes to the other, so a tech in the
+// corner ends as far apart as one midscreen (it used to end inside throw range, so the thrower could just throw again).
+function techPush(a, b, v) {
+  const K = (1 - Math.pow(0.85, 18)) / 0.15, T = v * K;
+  const da = Math.sign(a.x - b.x) || -b.facing || 1, db = -da;
+  const room = (p, d) => { const x = Math.max(40, Math.min(STAGE_W - 40, p.x)); return d > 0 ? STAGE_W - 40 - x : x - 40; };
+  const ra = Math.min(T, room(a, da)), rb = Math.min(T, room(b, db));
+  const ta = Math.min(room(a, da), T + (T - rb)), tb = Math.min(room(b, db), T + (T - ra));
+  a.vx = da * ta / K; b.vx = db * tb / K;
+}
 function rect(p, b) { // b = [fwd, up, w, h]
   const l = p.facing === 1 ? p.x + b[0] : p.x - b[0] - b[2];
   return { x: l, y: p.y + b[1], w: b[2], h: b[3] };
@@ -202,9 +220,10 @@ const M_FWD = [6, 9], M_BACK = [4, 7];
 const MOTIONS = {
   // 623: the → that starts it must be a fresh press (held ≤ 8 frames), so
   // walking forward into a quarter-circle still reads as 236, not a DP.
-  // ...and it can't pass through neutral between → and ↓ (so tap →, let go, ↓↘→ is still 236).
-  '623':   { sets: [M_FWD, [1, 2], [3]], last: [3, 6, 9], win: 16, freshFirst: 8, noNeutralAfterFirst: true },
-  '41236': { sets: [M_BACK, [1, 2], [3], M_FWD], last: M_FWD, win: 24 },
+  // ...and it can't rest in neutral between → and ↓ (one stray frame is forgiven; tap →, let go, ↓↘→ is still 236).
+  '623':   { sets: [M_FWD, [1, 2], [3]], last: [3, 6, 9], win: 16, freshFirst: 14, maxNeutral: 1 },
+  // 41236: a long-held ← must roll straight into ↙, so walking back then ↓↘→ stays a 236.
+  '41236': { sets: [M_BACK, [1, 2], [3], M_FWD], last: M_FWD, win: 20, freshFirst: 12, rollOK: [1], maxNeutral: 2 },   // ← then a pause (letting go) then 236 is a 236
   '236':   { sets: [[1, 2], [3], M_FWD], last: M_FWD, win: 16 },
   '214':   { sets: [[2, 3], [1], M_BACK], last: M_BACK, win: 16 },
   // 66 + L/M/H: dash attack straight from a double-tap (skill motions are checked first)
@@ -218,8 +237,10 @@ function matchMotion(h, name) {
   let i = mo.sets.length - 1, k = n - 1, firstAt = -1, secondAt = -1;
   for (; k >= Math.max(0, n - mo.win) && i >= 0; k--) if (mo.sets[i].includes(h[k])) { if (i === 1) secondAt = k; if (i === 0) firstAt = k; i--; }
   if (i >= 0) return false;
-  if (mo.noNeutralAfterFirst) for (let j = firstAt + 1; j < secondAt; j++) if (h[j] === 5) return false;
-  if (mo.freshFirst) {   // how long was the first direction held before the motion?
+  if (mo.maxNeutral !== undefined) { let nn = 0; for (let j = firstAt + 1; j < secondAt; j++) if (h[j] === 5 && ++nn > mo.maxNeutral) return false; }
+  // How long was the first direction held before the motion? A long hold still counts when it rolls straight into
+  // the diagonal (rollOK), e.g. holding ← to block and rolling ↙↓↘→ is a real half circle; ← then ↓ is not.
+  if (mo.freshFirst && !(mo.rollOK && mo.rollOK.includes(h[firstAt + 1]))) {
     let run = 0; for (let j = firstAt; j >= 0 && mo.sets[0].includes(h[j]); j--) run++;
     if (run > mo.freshFirst) return false;
   }
@@ -236,7 +257,31 @@ function techSkill(p, air, hist) {
   return null;
 }
 const baseId = id => id.split(/[.X]/)[0];
-function skillReady(p, id) { return !(p.cd[baseId(id)] > 0); }
+// ---------------------------------------------------------------- Infinite prevention (IPS)
+// Each skill can hit up to IPS_SKILLS times per combo, the same normal up to IPS_NORMALS times. A repeat passes through, so the
+// combo ends. Supers and set traps don't count. The log is a flat string on the defender (copies safely in snapshots).
+const IPS_NORMALS = 4, IPS_SKILLS = 2;
+function hitSource(a, proj) {   // -> [move id, instance key, kind] or null when it doesn't count
+  if (proj) {
+    if (proj.sup || proj.trap) return null;
+    if (proj.pup) return a.pupMove ? [baseId(a.pupMove), 'f' + (a.frame - a.pupT), 'skill'] : null;
+    return proj.src ? [proj.src, 'p' + proj.inst, 'skill'] : null;
+  }
+  if (a.state !== 'attack' || !a.move || !a.move.id) return null;
+  const m = a.move; if (m.kind === 'super' || m.kind === 'throw' || m.kind === 'gc') return null;
+  return [baseId(m.id), 'm' + (a.frame - a.t), m.kind === 'normal' && !m.special ? 'normal' : 'skill'];
+}
+function ipsRepeat(d, src) {   // true = this hit repeats something the combo already used too often
+  if (!src || !d.ipsLog) return false;
+  const [id, inst, kind] = src, seen = new Set();
+  for (const e of d.ipsLog.split(';')) { const [eid, einst] = e.split('@'); if (eid === id && einst !== inst) seen.add(einst); if (eid === id && einst === inst) return false; }
+  return seen.size >= (kind === 'normal' ? IPS_NORMALS : IPS_SKILLS);
+}
+function ipsNote(d, src) { if (!src) return; const e = src[0] + '@' + src[1]; if (!(';' + d.ipsLog + ';').includes(';' + e + ';')) d.ipsLog = d.ipsLog ? d.ipsLog + ';' + e : e; }
+// 2.0.1: a skill done with its motion input can't be done again until a short moment after it ends (TECH_CD)
+const TECH_CD = 10;
+const moveLen = m => (m.seq || []).reduce((a, s) => a + s[1], 0);
+function skillReady(p, id) { const b = baseId(id); return !(p.cd[b] > 0) && !(p.tcd && p.tcd[b] > 0); }
 function projBlocked(p, id) { const m = p.c.moves[baseId(id)]; return !!(m && m.proj) && G.projs.filter(q => q.owner === p.side).length >= (p.c.projMax || 1); }
 // pick the move for a technical input: L -> light version, M -> base, H -> EX (if 50 Spurt, else M)
 function techMove(p, id, btn) {
@@ -246,19 +291,22 @@ function techMove(p, id, btn) {
 }
 // the Friend takes one command at a time: she has to be back beside Cafe first
 function pupBusy(p, id) { const m = p.c.moves[id]; return !!(m && m.pup && p.pupState !== 'idle'); }
-function techOK(p, id) { return !projBlocked(p, id) && !pupBusy(p, id) && !(p.c.moves[id].cdAlways && !skillReady(p, id)); }
+function techOK(p, id, chain) { return !projBlocked(p, id) && (chain || !pupBusy(p, id)) &&   // a chain sends the Friend straight into the next skill
+   !(p.tcd && p.tcd[baseId(id)] > 0) && !(p.c.moves[id].cdAlways && !skillReady(p, id)); }
 
 // ---------------------------------------------------------------- Actions
 function startMove(p, id, tech) {
   const m = p.c.moves[id]; if (!m) return false;
-  p.move = m; p.setState('attack'); p.hitDone = []; p.connected = false; p.hitOK = false; p.launched = false;
+  const fromNormal = p.state === 'attack' && !!p.move && p.move.kind === 'normal';
+  p.move = m; p.setState('attack'); p.fromNormal = fromNormal; p.hitDone = []; p.connected = false; p.hitOK = false; p.launched = false;
   p.simple = (m.kind === 'special' || m.special) && !tech;
   if (m.cd && (p.simple || m.cdAlways)) p.cd[baseId(id)] = m.cd;
+  if (tech && (m.kind === 'special' || m.special)) p.tcd[baseId(id)] = moveLen(m) + TECH_CD;
   if (m.isEx) {
     p.meter -= 50; p.flash = 6; G.freeze = Math.max(G.freeze, 5);
     addText('EX', p.x, GY - 185, '#ffd24a', 24, 26); spark(p.x, GY - 90, 'armor', 1, 0); Sfx.play('power');
   } else if (m.kind === 'special' && tech && !m.followOf) addText('TECH', p.x, GY - 175, '#9ff', 13, 18);
-  if (m.kind === 'gc') { p.meter -= 50; p.flash = 8; callout(p, 'COUNTER SPURT', 'spurt'); Sfx.play('power'); }
+  if (m.kind === 'gc') { p.gcCd = GC_CD; p.meter -= 50; p.flash = 8; callout(p, 'COUNTER SPURT', 'spurt'); Sfx.play('power'); }
   else if (m.inv && m.inv[0] <= 5 && m.kind !== 'super') callout(p, 'INVINCIBLE', 'def');
   p.armorLeft = m.armor ? (m.armorHits || 1) : 0;
   if (m.kind === 'super') {
@@ -267,7 +315,7 @@ function startMove(p, id, tech) {
   if (m.kind === 'special') Sfx.play('whoosh');
   if (!m.air) { p.vx = 0; }
   if (baseId(id) === 'jS') p.airS = true;
-  if (m.kind === 'normal') p.meter = Math.min(100, p.meter + 0.4);
+  if (m.kind === 'normal') p.meter = Math.min(100, p.meter + 0.4 * METER_GAIN);
   return true;
 }
 
@@ -283,6 +331,7 @@ function tryAttack(p) {
     if (id && !(air && p.airS) && techOK(p, id)) {
       p.take('L'); p.take('M'); p.take('H'); return startMove(p, techMove(p, id, b), true);
     }
+    if (id && p.tcd[baseId(id)] > 0) { p.take('L'); p.take('M'); p.take('H'); addText('COOLDOWN', p.x, GY - 175, '#99a', 13, 20); return false; }
     // dash attacks: while dashing, or 66 + button
     if (!air && (p.state === 'dash' || matchMotion(p.bufHist[b] || p.hist, '66'))) {
       if (p.c.moves['d' + b]) { p.take(b); return startMove(p, 'd' + b); }
@@ -318,16 +367,19 @@ function tryAttack(p) {
 // cancel from a connected move
 function tryCancel(p) {
   const m = p.move;
-  if (!p.connected || p.t < m.first) return false;
+  if (!p.connected || (p.t < m.first && !m.pup)) return false;   // Cafe's skills have no hits of their own (the Friend's count)
   if (m.kind === 'super' || m.kind === 'throw') return false;
   if (p.meter >= 100 && !m.air && p.takeBoth('S', 'H')) return startMove(p, 'SU');
   // special chain (glass cannon): a special that HITS can cancel into a different special, each once per combo
-  if (m.kind === 'special' && p.c.specialChain && p.hitOK && !m.air && p.hitDone.filter(Boolean).length >= (m.hits || []).length) {   // after the move's last hit
+  // Cafe (puppet) chains the same way, once the Friend's last hit has landed
+  const lastHit = m.pup ? (p.c.puppet && p.pupState === 'act' && p.pupMove && baseId(p.pupMove) === baseId(m.id) && pupMoveOf(p) && (pupMoveOf(p).hits || []).every((_, i) => p.pupHit & (1 << i)))
+                        : p.hitDone.filter(Boolean).length >= (m.hits || []).length;
+  if (m.kind === 'special' && (p.c.specialChain || p.c.puppet) && p.hitOK && !m.air && lastHit) {   // after the move's last hit
     let id = null, b = null;
     if (p.has('L') || p.has('M') || p.has('H')) { b = p.has('H') ? 'H' : p.has('M') ? 'M' : 'L'; id = techSkill(p, false, p.bufHist[b]); }
     if (!id && p.has('S')) { const d = p.bufDir.S ?? p.dir; id = [1, 2, 3].includes(d) ? '2S' : (d === 6 || d === 9) ? '6S' : (d === 4 || d === 7) ? '4S' : '5S'; }
     const cur = baseId(m.followOf || m.id);
-    if (id && p.c.moves[id] && id !== cur && !p.chainUsed.includes(id) && techOK(p, id)) {
+    if (id && p.c.moves[id] && id !== cur && !p.chainUsed.includes(id) && techOK(p, id, true)) {
       if (!p.chainUsed.includes(cur)) p.chainUsed.push(cur);
       p.chainUsed.push(id);
       const tech = !!b; p.take('L'); p.take('M'); p.take('H'); p.take('S');
@@ -351,13 +403,13 @@ function tryCancel(p) {
     for (const b of ['H', 'M', 'L']) if (p.has(b) && ({ L: 1, M: 2, H: 3 })[b] > m.str) { p.take(b); return startMove(p, 'j' + b); }
     return false;
   }
-  // dash cancel (rushdown): →→ during a connected normal, 10 Spurt
-  if (p.c.dashCancel && m.kind === 'normal' && !m.air && p.dashBuf > 0 && p.meter >= 10) {
-    p.dashBuf = 0; p.meter -= 10; p.setState('dash'); p.dashMin = 8; p.vx = p.c.dash * p.facing; dust(p.x, GY, p.facing);
+  // dash cancel (rushdown): →→ during a connected normal, 50 Spurt (2.0.1: was 10)
+  if (p.c.dashCancel && m.kind === 'normal' && !m.air && p.dashBuf > 0 && p.meter >= 50) {
+    p.dashBuf = 0; p.meter -= 50; p.setState('dash'); p.dashMin = 8; p.dcLock = DC_LOCK; p.vx = p.c.dash * p.facing; dust(p.x, GY, p.facing);
     addText('DASH CANCEL', p.x, GY - 180, p.c.color, 14, 22); return true;
   }
   // crouching light chains into itself (rushdown)
-  if (p.c.lightChain && m.str === 1 && m.kind === 'normal' && !m.air && p.has('L') && [1, 2, 3].includes(p.bufDir.L ?? p.dir)) { p.take('L'); return startMove(p, '2L'); }
+  if (p.c.lightChain && m.str === 1 && m.kind === 'normal' && !m.air && (p.lc || 0) < LIGHT_CHAIN_MAX && p.has('L') && [1, 2, 3].includes(p.bufDir.L ?? p.dir)) { p.take('L'); p.lc = (p.lc || 0) + 1; return startMove(p, '2L'); }
   // auto-combo: mash L  -> 5L > 5M > 5H > 5S
   if (p.has('L')) {
     const next = { '5L': '5M', '2L': '5M', 'dL': '5M', '5M': '5H', '2M': '5H', 'dM': '5H', '5H': '5S', '2H': '5S' }[m.id];
@@ -384,10 +436,17 @@ function updateFighter(p) {
   p.t++;
   if (p.combo > 0 && ['hit', 'airHit', 'cineHit', 'down'].includes(p.state)) p.comboT++;
   for (const k in p.cd) if (p.cd[k] > 0) p.cd[k]--;
+  for (const k in p.tcd) if (p.tcd[k] > 0) p.tcd[k]--;
   if (p.guts > 0) p.guts--;
   if (p.gold > 0) p.gold--;
   const spd = p.gold > 0 ? 1.25 : 1;   // Golshi Mode
   if (p.flash > 0) p.flash--;
+  if (p.gcCd > 0) p.gcCd--;
+  if (p.techLock > 0) p.techLock--;
+  if (p.dcLock > 0) p.dcLock--;
+  // a fresh throw-tech press (or Counter Spurt in hitstun) while stuck in a combo or blockstun locks out techs for a moment,
+  // so mashing L+M doesn't auto-escape the throw that follows
+  if (['hit', 'airHit', 'block'].includes(p.state) && ((p.buf.L === 1 && p.buf.M > 0) || (p.buf.M === 1 && p.buf.L > 0) || (p.buf.C === 1 && p.state !== 'block'))) p.techLock = TECH_LOCK;
   const faceOpp = () => { if (o.x !== p.x) p.facing = o.x > p.x ? 1 : -1; };
 
   switch (p.state) {
@@ -397,11 +456,13 @@ function updateFighter(p) {
     case 'idle': case 'walk': case 'crouch': case 'dash': case 'land0': {
       if (p.state !== 'dash') faceOpp();
       p.combo = 0; p.jug = 0; p.airS = false; if (p.chainUsed.length) p.chainUsed = [];
-      p.comboT = 0; p.prorate = 1; p.gbUsed = p.wbUsed = false; p.bounce = null; p.limitHit = false;
+      p.comboT = 0; p.prorate = 1; p.gbUsed = p.wbUsed = false; p.bounce = null; p.limitHit = false; p.ipsLog = '';
       if (G.phase !== 'fight') { p.vx = 0; p.setState('idle'); break; }
-      if (tryAttack(p)) break;
+      if (p.state !== 'dash') p.lc = 0;
+      const locked = p.dcLock > 0;   // committed to a dash cancel (or a paid Golshi Rush stop): no attack or jump yet
+      if (!locked && tryAttack(p)) break;
       const d = p.dir;
-      if ([7, 8, 9].includes(d)) { p.prevState = p.state; jump(p); break; }
+      if (!locked && [7, 8, 9].includes(d)) { p.prevState = p.state; jump(p); break; }
       if (p.state === 'dash') {
         if (d === 6 || d === 3 || p.t < p.dashMin) { p.vx = c.dash * spd * p.facing; if (p.t % 8 === 0) dust(p.x, GY, p.facing); break; }
         p.vx *= 0.5; if (p.t > 0) p.setState('idle'); break;
@@ -455,9 +516,15 @@ function updateFighter(p) {
       // follow-ups (e.g. Golshi Rush): press a button during the window to branch
       if (m.follow && p.t >= m.follow.win[0] && p.t <= m.follow.win[1] && (!m.follow.onHit || p.hitOK)) {
         const fb = ['S', 'H', 'M', 'L'].find(b => p.has(b) && m.follow[b]);
-        if (fb) {
+        // stopping Golshi Rush works like a dash cancel, raw or cancelled out of a normal: 50 Spurt (not usable
+        // below 50, the rush just carries on) and the same 10-frame lock before she can attack
+        const paidStop = m.follow[fb] === 'stop' && p.c.dashCancel;
+        if (fb && !(paidStop && p.meter < 50)) {
           p.take(fb);
-          if (m.follow[fb] === 'stop') { p.vx *= 0.25; p.setState('idle'); dust(p.x, GY, p.facing); }
+          if (m.follow[fb] === 'stop') {
+            if (paidStop) { p.meter -= 50; p.dcLock = DC_LOCK; addText('DASH CANCEL', p.x, GY - 180, p.c.color, 14, 22); }
+            p.vx *= 0.25; p.setState('idle'); dust(p.x, GY, p.facing);
+          }
           else { const keep = p.vx; startMove(p, m.follow[fb], true); p.vx = keep * 0.6; }
           break;
         }
@@ -477,6 +544,9 @@ function updateFighter(p) {
       if (p.state !== 'attack') break;
       if (m.air && p.y >= GY && p.t > 1) { p.y = GY; p.vy = 0; p.landRec = m.landRec || 5; p.setState('land'); dust(p.x, GY, p.facing); break; }
       if (p.t >= m.total) {
+        // 2.0.1: Cafe can't act while the Friend is carrying out the skill she commanded; she holds her last frame
+        if (p.c.puppet && m.pup && p.pupState === 'act' && p.pupMove && baseId(p.pupMove) === baseId(m.id)) { p.t = m.total; p.pupHold = true; break; }
+        p.pupHold = false;
         if (m.air) { p.setState('air'); }
         else p.setState(m.crouch ? 'crouch' : 'idle');
       }
@@ -487,7 +557,7 @@ function updateFighter(p) {
       if (--p.hs <= 0) p.setState(p.crouchHit ? 'crouch' : 'idle');
       break;
     case 'block':
-      if (p.meter >= 50 && p.takeBoth('S', 'H')) { startMove(p, 'GC'); break; }
+      if (p.has('C') && p.meter >= 50 && !p.gcCd) { p.take('C'); startMove(p, 'GC'); break; }
       p.vx *= 0.85;
       if (--p.bs <= 0) p.setState(p.crouchBlock ? 'crouch' : 'idle');
       break;
@@ -529,7 +599,7 @@ function updateFighter(p) {
         if (p.throwBack) { const tx = o.x; o.x = p.x - p.facing * 70; p.facing = -p.facing; }
       }
       if (p.t === 26) {
-        o.comboDmg = 0; dealDamage(p, o, p.throwDmg, 1); o.combo = 1; noteDamage(o, p.throwDmg);
+        o.comboDmg = 0; dealDamage(p, o, p.throwDmg, 1); clearProjs(o); o.combo = 1; noteDamage(o, p.throwDmg);
         o.setState('airHit'); o.kd = true; o.hardKd = true; o.vx = p.throwVx * p.facing; o.vy = -9; o.y = GY - 1;
         if (!p.noTech) o.jug = JUG_MAX;   // a normal throw can't be comboed off, corner or not (command grabs keep their follow-ups)
         spark(o.x, GY - 90, 'hit', 2, p.facing, p); G.freeze = 10; G.shake = 8; Sfx.play('heavy'); o.hitLvl = 2;
@@ -541,14 +611,14 @@ function updateFighter(p) {
     case 'thrown':
       if (o.state !== 'throwing') { p.setState('airHit'); p.kd = true; p.vy = -4; p.vx = 0; p.y = Math.min(p.y, GY - 1); break; }   // throw got interrupted
       p.x = o.x + o.facing * 62; if (p.y < GY) p.y = Math.min(GY, p.y + 14);
-      if (p.t <= 10 && !o.noTech && p.takeBoth('L', 'M')) { // tech!
+      if (p.t <= 10 && !o.noTech && !p.techLock && p.takeBoth('L', 'M')) { // tech!
         p.setState('tech'); o.setState('tech');
-        p.vx = -8 * o.facing; o.vx = 8 * o.facing;
+        techPush(p, o, 7);   // push apart: ends ~145 px apart, in the corner too
         callout(p, 'THROW ESCAPE', 'def'); spark((p.x + o.x) / 2, GY - 90, 'block', 2, 0); Sfx.play('block');
-      } else if (p.t <= 10 && o.noTech && p.meter >= 50 && p.takeBoth('S', 'H')) {   // Counter Spurt breaks a command grab
-        p.meter -= 50; p.flash = 8;
+      } else if (p.t <= 16 && o.noTech && p.meter >= 50 && !p.gcCd && !p.techLock && p.take('C')) {   // Counter Spurt breaks a command grab
+        p.meter -= 50; p.flash = 8; p.gcCd = GC_CD;
         p.setState('tech'); o.setState('tech');
-        p.vx = -10 * o.facing; o.vx = 10 * o.facing;
+        techPush(p, o, 8);
         callout(p, 'GRAB BREAK', 'spurt'); spark((p.x + o.x) / 2, GY - 90, 'armor', 2, 0); Sfx.play('power');
       }
       break;
@@ -592,7 +662,7 @@ function doEvent(p, ev) {
     p.gold = ev === 'goldEx' ? 600 : 360; p.flash = 10; Sfx.play('power'); callout(p, 'GOLSHI MODE', 'spurt');
   }
   if (ev === 'taunt') {
-    p.meter = Math.min(100, p.meter + 8);
+    p.meter = Math.min(100, p.meter + 8 * METER_GAIN);
     if (p.c.look.tauntLine) addText(p.c.look.tauntLine, p.x, GY - 215, p.c.look.fxColor, 22, 45);
   }
   if (ev === 'proj' || ev === 'proj2' || ev.startsWith('shot')) {
@@ -601,7 +671,8 @@ function doEvent(p, ev) {
     G.projs.push({ owner: p.side, simple: p.simple, style: pj.style || 'wind', hitsLeft: pj.hits || 1, cool: 0,
       x: p.x + p.facing * (pj.x0 ?? 60), y: p.y + (pj.y0 ?? -92), facing: p.facing, vx: pj.vx * p.facing, vy: pj.vy || 0,
       life: pj.life, box: pj.box, hit: pj.hit, t: 0, dead: false, sup: !!pj.sup, size: pj.size || 1,
-      grav: pj.grav || 0, roll: pj.roll || 0, trap: pj.trap || null, phase: pj.trap ? 'fly' : null });
+      grav: pj.grav || 0, roll: pj.roll || 0, trap: pj.trap || null, phase: pj.trap ? 'fly' : null,
+      src: p.move && p.move.id ? baseId(p.move.id) : '', inst: p.frame - p.t });
     Sfx.play(pj.sup ? (pj.size > 1 ? 'heavy' : 'whoosh') : 'wind');
   }
   if (ev === 'detonate') {   // set traps go off right now
@@ -625,7 +696,7 @@ function tryGrab(p) {
     spark(o.x, GY - 90, 'super', 2, p.facing); G.freeze = 12; Sfx.play('grab'); Sfx.play('heavy'); p.connected = true; return;
   }
   if (o.state === 'attack' && o.move.kind === 'throw' && o.t <= o.move.grab[1]) { // simultaneous throws -> tech
-    p.setState('tech'); o.setState('tech'); p.vx = -8 * p.facing; o.vx = -8 * o.facing;
+    p.setState('tech'); o.setState('tech'); techPush(p, o, 8);
     addText('THROW TECH', (p.x + o.x) / 2, GY - 210, '#9cf', 24); return;
   }
   p.throwDmg = m.throwDmg || 1300; p.noTech = !!m.noTech; p.throwVx = m.throwVx ?? 6; p.throwAnimCur = m.throwAnim || null;
@@ -714,7 +785,7 @@ function updateCine(p) {
       const scale = Math.max(0.5, comboScale(o));
       const miracle = !!p.c.lowHpBoost && p.hp <= p.c.hp * 0.3;
       const dmg = Math.round(step[3] * scale * (p.guts ? 1.15 : 1) * (p.c.dmgMul || 1) * (miracle ? 1.15 : 1) * (p.boss ? 1.15 : 1));   // same multipliers as normal hits
-      dealDamage(p, o, dmg, 0);
+      dealDamage(p, o, dmg, 0); clearProjs(o);
       o.combo++; o.flash = 4;
       noteDamage(o, dmg);
       spark(o.x - p.facing * 10, GY - 90 - (fin ? 40 : 0), 'super', fin ? 3 : 1, p.facing, p);
@@ -736,8 +807,13 @@ function dealDamage(a, d, dmg, chip) {
   d.hp = Math.max(G.mode === 'training' ? 1 : 0, d.hp - dmg);   // the training dummy never gets KO'd (the readout still shows full damage)
   if (d.c.lowHpBoost && !d.miracle && d.hp > 0 && d.hp <= d.c.hp * 0.3) { d.miracle = true; d.flash = 14; callout(d, 'MIRACLE MODE', 'spurt'); }
   d.comboDmg += dmg;
-  a.meter = Math.min(100, a.meter + dmg / 70);
-  d.meter = Math.min(100, d.meter + dmg / 140);
+  a.meter = Math.min(100, a.meter + dmg / 70 * METER_GAIN);
+  d.meter = Math.min(100, d.meter + dmg / 140 * METER_GAIN);
+}
+// 2.0.1: getting hit or thrown clears your projectiles and set potions off the screen (super shots, the Friend's
+// attacks and potions already exploding stay)
+function clearProjs(d) {
+  for (const q of G.projs) if (q.owner === d.side && !q.dead && !q.sup && !q.pup && q.phase !== 'boom') { q.dead = true; spark(q.x, q.y - 10, 'block', 1, 0); }
 }
 function noteDamage(d, dmg) {
   if (G.mode === 'training' && !G.resim) G.dmgInfo = { last: dmg, combo: d.comboDmg, hits: d.combo, t: 0 };
@@ -779,10 +855,10 @@ function resolveHit(a, d, h, srcX, fromAir, proj) {
     const okLow = h.guard !== 'low' || crouching;
     const okHigh = h.guard !== 'high' || !crouching;
     if (okLow && okHigh) {
-      d.setState('block'); d.bs = h.bs + (a.gold > 0 ? 2 : 0); d.crouchBlock = !!crouching;
+      d.setState('block'); d.bs = h.bs + (a.gold > 0 ? 1 : 0); d.crouchBlock = !!crouching;
       d.vx = dirSign * h.push * 1.2;
       if (h.chip) dealDamage(a, d, Math.min(d.hp - (h.cine ? 0 : 1), Math.round(h.dmg * h.chip)), 1);
-      d.meter = Math.min(100, d.meter + 1.5); a.meter = Math.min(100, a.meter + 1);
+      d.meter = Math.min(100, d.meter + 1.5 * METER_GAIN); a.meter = Math.min(100, a.meter + 1 * METER_GAIN);
       spark(d.x - dirSign * 25, GY - (crouching ? 55 : 95), 'block', Math.min(h.lvl, 2), -dirSign);
       G.freeze = 6 + h.lvl * 2; Sfx.play('block');
       a.connected = true; a.hitOK = false;
@@ -803,9 +879,17 @@ function resolveHit(a, d, h, srcX, fromAir, proj) {
     if (!d.limitHit) { d.limitHit = true; addText('COMBO LIMIT', d.x, GY - 210, '#9fe3ff', 22, 40); }
     return null;
   }
+  // ------ infinite prevention: a repeated skill (or a normal used too often) passes through and the combo ends
+  const src = hitSource(a, proj);
+  if (['hit', 'airHit'].includes(d.state) && d.combo > 0 && ipsRepeat(d, src)) {
+    if (!d.limitHit) { d.limitHit = true; addText('REPEAT', d.x, GY - 210, '#9fe3ff', 20, 34); }
+    return null;
+  }
   // ------ hit
-  const counter = d.state === 'attack' && d.t < d.move.first && d.move.kind !== 'throw';
-  if (!(['hit', 'airHit'].includes(d.state))) { d.combo = 0; d.comboDmg = 0; d.jug = 0; d.comboT = 0; d.gbUsed = d.wbUsed = false; d.bounce = null; d.limitHit = false; }
+  const counter = (d.state === 'attack' && d.t < d.move.first && d.move.kind !== 'throw') ||
+    (G.mode === 'training' && d.side === 1 && d.combo === 0 && G.training.counter === 'on');   // training: every first hit is a counter hit
+  if (!(['hit', 'airHit'].includes(d.state))) { d.combo = 0; d.comboDmg = 0; d.jug = 0; d.comboT = 0; d.gbUsed = d.wbUsed = false; d.bounce = null; d.limitHit = false; d.ipsLog = ''; }
+  ipsNote(d, src);
   // punish (bait & punish): hitting someone stuck in the recovery of their move or a long landing
   const punish = !!a.c.punisher && d.combo === 0 && ((d.state === 'attack' && d.move.kind !== 'taunt' && d.t > d.move.lastActive) || (d.state === 'land' && d.landRec >= 7));
   if (d.combo === 0) d.prorate = counter || punish ? 1 : h.lvl === 0 ? 0.8 : h.lvl === 1 ? 0.9 : 1;
@@ -814,7 +898,7 @@ function resolveHit(a, d, h, srcX, fromAir, proj) {
   const simple = proj ? proj.simple : (a.state === 'attack' && a.simple);
   const miracle = !!a.c.lowHpBoost && a.hp <= a.c.hp * 0.3;
   let dmg = Math.round(h.dmg * scale * (counter ? 1.1 : 1) * (a.guts ? 1.15 : 1) * (simple ? 0.9 : 1) * (a.gold > 0 ? 1.08 : 1) * (a.c.dmgMul || 1) * (punish ? 1.2 : 1) * (miracle ? 1.15 : 1) * (a.boss ? 1.15 : 1));
-  dealDamage(a, d, dmg, 0);
+  dealDamage(a, d, dmg, 0); clearProjs(d);
   d.combo++; d.flash = 3;
   noteDamage(d, dmg);
   const decay = d.comboT > DECAY_AT ? Math.max(0.45, 1 - (d.comboT - DECAY_AT) / 320) : 1;   // hitstun decay in long combos
@@ -935,7 +1019,10 @@ function updateProjs() {
     if (pupHurtCheck(d, q)) continue;
     if (hb && overlap(projRect(q), hb)) {
       // a trap is blocked by holding away from Tachyon, wherever the potion is (no accidental cross-ups)
-      const r = resolveHit(G.p[q.owner], d, q.hit, q.trap ? G.p[q.owner].x : q.x - q.vx * 4, false, q);
+      // a moving shot is always blocked from the side it's travelling from, even once a multi-hit shot has passed
+      // through the defender (Kitasan's EX Festival Drum used to hit the second time from behind)
+      const dir = Math.sign(q.vx) || q.facing || 1;
+      const r = resolveHit(G.p[q.owner], d, q.hit, q.trap ? G.p[q.owner].x : d.x - dir * 40, false, q);
       if (r) { if (--q.hitsLeft > 0) { q.cool = 7; q.vx *= 0.6; } else if (q.trap) q.cool = 999; else q.dead = true; }
     }
   }
@@ -991,8 +1078,13 @@ function step(inputs) {
   // training conveniences & frame advantage
   if (G.mode === 'training') {
     for (const p of G.p) {
-      if (p.actionable() && p.state !== 'air') { if (p.hp < p.c.hp && p.combo === 0 && opp(p).actionable()) p.hp = p.c.hp; }
-      if (G.training.meter && p.actionable()) p.meter = 100;
+      const T = G.training, me = p.side === 0 ? 'p1' : 'dummy';
+      // health: refill = back to full after each combo · low = back to 30% (Miracle Mode, Guts) · off = stays down (never KOs)
+      const hpMode = T[me + 'Hp'] || 'refill', hpTo = hpMode === 'low' ? Math.round(p.c.hp * 0.3) : p.c.hp;
+      if (hpMode !== 'off' && p.actionable() && p.state !== 'air' && p.combo === 0 && opp(p).actionable() && p.hp !== hpTo && (hpMode === 'low' || p.hp < hpTo)) p.hp = hpTo;
+      // Spurt: full / half / empty are topped back up (or emptied) whenever the runner is free; normal builds as in a match
+      const sp = T.meter === false ? 'normal' : (T[me + 'Spurt'] || 'full');
+      if (sp !== 'normal' && p.actionable()) p.meter = sp === 'full' ? 100 : sp === 'half' ? 50 : 0;
     }
     const A = G.adv;
     if (A && A.val === null) {

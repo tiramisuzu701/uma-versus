@@ -4,13 +4,19 @@ for _d in ('build/wiki', 'build/shots/ui', 'build/shots/fx'): _os.makedirs(_os.p
 import json,re,hashlib
 root=ROOT+'/'
 assets={k:json.load(open(root+f'assets/sprites/{k}.json')) for k in ['spe','suz','gs','vo','ds','mm','tt','kb','jp','at','mc','df']}
-files=['data.js','engine.js','render.js','stages.js','net.js','replay.js','ui.js','music.js','trials.js','tutorial.js','arcade.js','ranges.js','ai.js','config.js','account.js','social.js','main.js']
+files=['data.js','engine.js','render.js','stages.js','net.js','replay.js','ui.js','music.js','trials.js','tutorial.js','arcade.js','ranges.js','ai.js','config.js','namefilter.js','account.js','social.js','main.js']
 src={f:open(root+'src/'+f).read() for f in files}
 # BUILD = fingerprint of everything that affects the simulation (characters, engine, netcode)
 build=hashlib.sha1((src['data.js']+src['engine.js']+src['net.js']).encode()).hexdigest()[:6]
 code=f"const BUILD = '{build}';\n"+'\n'.join(src[f] for f in files)
 peer=open(ROOT+'/vendor/peerjs.min.js').read()
 peer=re.sub(r'//# sourceMappingURL=.*','',peer)
+# The match connection asks for reliable:false. PeerJS turns that into an unordered channel that still retransmits
+# lost packets; rollback resends every unacknowledged input each frame anyway, so make it a true fire-and-forget
+# channel (maxRetransmits 0): a lost packet is simply covered by the next one instead of queueing a retransmit.
+# Spectator connections ask for reliable:true and are unchanged.
+assert peer.count('r={ordered:!!e.reliable}') == 1
+peer=peer.replace('r={ordered:!!e.reliable}', 'r=e.reliable?{ordered:!0}:{ordered:!1,maxRetransmits:0}')
 assert '</script' not in peer.lower()
 html=open(root+'src/template.html').read()
 import base64
