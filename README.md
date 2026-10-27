@@ -2,6 +2,8 @@
 
 # Uma Versus
 
+[![AI-DECLARATION: pair](https://img.shields.io/badge/䷼%20AI--DECLARATION-pair-ffedd5?labelColor=ffedd5)](https://ai-declaration.md)
+
 A fan-made 2D fighting game with the Umamusume cast. It runs in the browser, no install needed.
 
 **Update 2.0.1 · build `9e9133`**
@@ -37,10 +39,11 @@ The wiki has the full guide, frame data for every move and all the combos: https
 ## Credits
 
 - Fan project. *Umamusume: Pretty Derby* and its characters belong to Cygames, Inc. This project is not affiliated with or endorsed by Cygames.
-- Free and non-commercial. No monetization of any kind.
+- The sprites belong to Cygames and I do not claim credit for the creation or the ownership of them (Unsure who extracted the sprites. Please let me know if you know!!). I obtained them at this link: <https://www.spriters-resource.com/pc_computer/umamusumeprettyderbypartydash/>
+- The music also belongs to Cygames.
+- Free and non-commercial.
 - Fonts: Barlow Condensed and Dela Gothic One, SIL Open Font License 1.1 (see `vendor/fonts/`).
 - Netcode: PeerJS, MIT License (see `vendor/`).
 - Accounts: supabase-js, MIT License (see `vendor/`).
 
-DISCLAIMER:
-Made with AI help on the code. The game itself, the characters and the design are mine, and I've tested and tuned everything. Please don't obliterate me
+DISCLAIMER: Made with AI help on the code (see [AI-DECLARATION.md](AI-DECLARATION.md) for more details). The characters move sets are my own, and I've tested and tuned everything with the help of others.
