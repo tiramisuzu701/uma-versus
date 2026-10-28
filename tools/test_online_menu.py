@@ -21,7 +21,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(); pg = await b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
         await pg.clock.install()
-        await pg.goto('file://' + (sys.argv[1] if len(sys.argv) > 1 else ROOT+'/index.html'))
+        await pg.goto('file://' + (sys.argv[1] if len(sys.argv) > 1 else ROOT+'/build/uma-versus.html'))
         await pg.clock.run_for(6000); ok = n = 0
         # 1. first-time draws of every runner in every colour
         r = await pg.evaluate("""() => { let worst = 0, who = ''; for (const cid of ROSTER) for (let pal = 1; pal < PALETTES.length; pal++) {

@@ -13,7 +13,7 @@ async def main():
         A, B, C = await ctx.new_page(), await ctx.new_page(), await ctx.new_page(); errs = []
         for n, pg in (('A', A), ('B', B), ('C', C)):
             pg.on('pageerror', lambda e, n=n: errs.append(n + ': ' + str(e)))
-            await pg.goto('file://' + ROOT + '/index.html', wait_until='domcontentloaded', timeout=120000); await pg.wait_for_timeout(2500)
+            await pg.goto('file://' + ROOT + '/build/uma-versus.html', wait_until='domcontentloaded', timeout=120000); await pg.wait_for_timeout(2500)
         for pg in (A, B): await pg.evaluate("() => { UI.screen='online'; showNetPanel(); document.getElementById('netLocal').checked = true; }")
         await A.click('#netHost'); await A.wait_for_timeout(200); await B.click('#netJoin'); await B.wait_for_timeout(1500)
         # the stand-in spectator: whatever the host sends it is queued for the test to carry to tab C

@@ -18,7 +18,7 @@ JS = r"""([meter, fromNormal, mv]) => { tick = () => {}; const N = (o = {}) => (
   return { stopped: stopped >= 0 && stopped <= 10, stopF: stopped, meter: Math.round(a.meter), attackAfter: attackAt }; }"""
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
-    pg.goto('file://' + ROOT + '/index.html'); pg.wait_for_timeout(800); ok = n = 0
+    pg.goto('file://' + ROOT + '/build/uma-versus.html'); pg.wait_for_timeout(800); ok = n = 0
     for label, args, check in [
         ('5M > 236L > S with 100 Spurt', [100, True], lambda r: r['stopped'] and r['meter'] <= 56 and r['attackAfter'] >= 10),
         ('5M > 236L > S with 40 Spurt', [40, True], lambda r: not r['stopped']),

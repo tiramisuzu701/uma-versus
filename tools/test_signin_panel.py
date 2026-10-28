@@ -11,7 +11,7 @@ from playwright.async_api import async_playwright
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(); pg = await b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
-        await pg.goto('file://' + ROOT + '/index.html'); await pg.wait_for_timeout(2500); ok = n = 0
+        await pg.goto('file://' + ROOT + '/build/uma-versus.html'); await pg.wait_for_timeout(2500); ok = n = 0
         r = await pg.evaluate("""async () => { const c = []; const real = render; render = () => { c.push(UI.screen); real(); };
           UI.screen = 'mode'; await new Promise(r => setTimeout(r, 1000)); const menu = c.length; c.length = 0;
           UI.screen = 'online'; showNetPanel(); await new Promise(r => setTimeout(r, 1000)); const online = c.length;

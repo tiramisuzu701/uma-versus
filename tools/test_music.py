@@ -8,7 +8,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--autoplay-policy=no-user-gesture-required'])
         pg = await b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
-        await pg.goto('file://' + ROOT + '/index.html'); await pg.wait_for_timeout(2500)
+        await pg.goto('file://' + ROOT + '/build/uma-versus.html'); await pg.wait_for_timeout(2500)
         async def snap(lab, wait=0):
             if wait: await pg.wait_for_timeout(wait)
             print(f'{lab:28s}', await pg.evaluate(STATE))

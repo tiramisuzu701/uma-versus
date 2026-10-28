@@ -17,7 +17,7 @@ JS = r"""() => {
 }"""
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
-    pg.goto('file://' + ROOT + '/index.html'); pg.wait_for_timeout(800)
+    pg.goto('file://' + ROOT + '/build/uma-versus.html'); pg.wait_for_timeout(800)
     n, gap, length, cd = pg.evaluate(JS)
     ok = gap >= length + cd
     print('OK ' if ok else 'BAD', f'Kitasan DP spammed: {n} DPs in 6 s, closest two {gap}f apart (move {length}f + cooldown {cd}f)')

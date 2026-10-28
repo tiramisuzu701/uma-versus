@@ -10,7 +10,7 @@ GOOD = ['Glass', 'Assassin', 'Yoshitaka', 'Grape', 'Team Spica', 'Cocoon', 'Torp
         'Essex', 'Analyst', 'Titan', 'Hassan', 'Mitsuki', 'Nice Nature', 'Twin Turbo', 'Haru Urara', 'Hishi Amazon', 'Taiki Shuttle']
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
-    pg.goto('file://' + ROOT + '/index.html'); pg.wait_for_timeout(800)
+    pg.goto('file://' + ROOT + '/build/uma-versus.html'); pg.wait_for_timeout(800)
     missed = pg.evaluate('ns => ns.filter(n => !nameBlocked(n))', BAD)
     falsepos = pg.evaluate('ns => ns.filter(n => nameBlocked(n))', GOOD)
     print('blocked', len(BAD) - len(missed), '/', len(BAD), 'missed', missed)

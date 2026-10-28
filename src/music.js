@@ -16,6 +16,9 @@ const Music = {
   src(id) { if (document.readyState === 'loading') return null; const el = document.getElementById('mus-' + id); return el ? el.textContent : null; },
   url(id) {
     if (this.urls[id]) return this.urls[id];
+    // the website build keeps the tracks as separate files next to the page (streamed, cached by the browser);
+    // the single-file build carries them inside the page
+    if (typeof MUSIC_URL === 'string') return (this.urls[id] = MUSIC_URL + id + '.mp3');
     const b64 = this.src(id); if (!b64) return null;
     // not prewarmed yet: decode now (slow, ~30 ms for a full track)
     const bin = atob(b64), u8 = new Uint8Array(bin.length);
@@ -25,6 +28,7 @@ const Music = {
   // decode the tracks one at a time in the background, once the page has finished arriving,
   // so starting a theme never freezes a frame. The menu theme goes first.
   async prewarm() {
+    if (typeof MUSIC_URL === 'string') { this.el('menu'); this.unlock(); return; }   // website build: only the menu theme starts downloading now, the rest when they're needed
     if (document.readyState === 'loading') await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));
     const ids = [...document.querySelectorAll('script.track')].map(el => el.id.slice(4)).sort((a, b) => (b === 'menu') - (a === 'menu'));
     for (const id of ids) {

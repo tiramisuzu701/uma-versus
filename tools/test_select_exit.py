@@ -7,7 +7,7 @@ errs = []
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(viewport={'width': 960, 'height': 540})
     pg.on('pageerror', lambda e: errs.append(str(e)))
-    pg.goto('file://' + ROOT + '/index.html'); pg.wait_for_timeout(1500)
+    pg.goto('file://' + ROOT + '/build/uma-versus.html'); pg.wait_for_timeout(1500)
     key = lambda k: (pg.keyboard.press(k), pg.wait_for_timeout(120))
     st = lambda: pg.evaluate("() => [UI.screen, !!UI.selExit, UI.selExitIdx, JSON.stringify(UI.selDone)]")
     for mode in ['versus', 'cpu', 'training']:

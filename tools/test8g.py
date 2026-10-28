@@ -21,7 +21,7 @@ async def main():
         errs=[]
         for n,pg in (('A',A),('B',B)):
             pg.on('pageerror', lambda e, n=n: errs.append(n+': '+str(e)))
-            await pg.goto('file://' + ROOT + '/index.html'+Q); await pg.wait_for_timeout(500)
+            await pg.goto('file://' + ROOT + '/build/uma-versus.html'+Q); await pg.wait_for_timeout(500)
             await pg.evaluate("() => { UI.screen='online'; showNetPanel(); document.getElementById('netLocal').checked = true; }")
         await A.click('#netHost'); await A.wait_for_timeout(200)
         await B.click('#netJoin'); await B.wait_for_timeout(1500)

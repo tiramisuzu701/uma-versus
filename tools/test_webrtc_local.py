@@ -18,7 +18,7 @@ async def main():
             ctx = await b.new_context(viewport={'width': 960, 'height': 540}); A = await ctx.new_page(); B = await ctx.new_page(); errs = []; ok = n = 0
             for nm, pg in (('A', A), ('B', B)):
                 pg.on('pageerror', lambda e, nm=nm: errs.append(nm + ': ' + str(e)))
-                await pg.goto('file://' + ROOT + '/index.html'); await pg.wait_for_timeout(800)
+                await pg.goto('file://' + ROOT + '/build/uma-versus.html'); await pg.wait_for_timeout(800)
                 await pg.evaluate(LOCAL); await pg.evaluate("() => { UI.screen = 'online'; showNetPanel(); }")
             await A.click('#netHost'); await A.wait_for_timeout(1500)
             code = await A.evaluate("() => Net.code"); await B.fill('#netCodeIn', code); await B.click('#netJoin')

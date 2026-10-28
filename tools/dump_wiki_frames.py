@@ -45,7 +45,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(); pg = await b.new_page()
         errs=[]; pg.on('pageerror', lambda e: errs.append(str(e)))
-        await pg.goto('file://' + ROOT + '/index.html', wait_until='domcontentloaded', timeout=120000); await pg.wait_for_timeout(3000)
+        await pg.goto('file://' + ROOT + '/build/uma-versus.html', wait_until='domcontentloaded', timeout=120000); await pg.wait_for_timeout(3000)
         await pg.evaluate("() => { tick = () => {}; render = () => {}; }")
         open(ROOT+'/build/wiki/wiki_frames.json','w').write(await pg.evaluate(JS))
         print('ERR', errs); await b.close()

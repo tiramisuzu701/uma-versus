@@ -38,7 +38,7 @@ JS = r"""() => {
 }"""
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(); pe = []; pg.on('pageerror', lambda e: pe.append(str(e)))
-    pg.goto('file://' + ROOT + '/index.html'); pg.wait_for_timeout(1500)
+    pg.goto('file://' + ROOT + '/build/uma-versus.html'); pg.wait_for_timeout(1500)
     pg.evaluate("() => { tick = () => {}; render = () => {}; Sfx.play = () => {}; }")
     out, errs = pg.evaluate(JS); b.close()
 for l in out: print(l)

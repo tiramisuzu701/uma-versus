@@ -10,7 +10,7 @@ async def main():
     lv = int(sys.argv[1]) if len(sys.argv) > 1 else 3
     async with async_playwright() as p:
         br = await p.chromium.launch(); pg = await br.new_page()
-        await pg.goto('file://' + ROOT + '/index.html', wait_until='domcontentloaded', timeout=120000); await pg.wait_for_timeout(3000)
+        await pg.goto('file://' + ROOT + '/build/uma-versus.html', wait_until='domcontentloaded', timeout=120000); await pg.wait_for_timeout(3000)
         await pg.evaluate("() => { tick = () => {}; render = () => {}; Sfx.play = () => {}; }")
         R = await pg.evaluate("() => ROSTER")
         pairs = []

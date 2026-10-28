@@ -40,7 +40,7 @@ CASES = {
 }
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
-    pg.goto('file://' + ROOT + '/index.html'); pg.wait_for_timeout(800); pg.evaluate(LIB)
+    pg.goto('file://' + ROOT + '/build/uma-versus.html'); pg.wait_for_timeout(800); pg.evaluate(LIB)
     ok = 0
     for name, js in CASES.items():
         good, info = pg.evaluate(js); ok += good

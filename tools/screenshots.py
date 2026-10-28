@@ -45,7 +45,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=['--autoplay-policy=no-user-gesture-required']); pg = await b.new_page(viewport={'width':960,'height':540})
         errs=[]; pg.on('pageerror', lambda e: errs.append(str(e)))
-        await pg.goto('file://' + ROOT + '/index.html'); await pg.wait_for_timeout(1500)
+        await pg.goto('file://' + ROOT + '/build/uma-versus.html'); await pg.wait_for_timeout(1500)
         await pg.evaluate("() => { window.__tick = tick; tick = () => { UI.t++; }; }")
         imgs=[]
         for name, js in CASES:

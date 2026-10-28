@@ -20,7 +20,7 @@ JS = r"""([first, next, block]) => { tick = () => {}; const N = (o = {}) => ({ .
   return { hitF, chained, maxCombo }; }"""
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
-    import sys; pg.goto('file://' + (sys.argv[1] if len(sys.argv) > 1 else ROOT+'/index.html')); pg.wait_for_timeout(800); ok = n = 0
+    import sys; pg.goto('file://' + (sys.argv[1] if len(sys.argv) > 1 else ROOT+'/build/uma-versus.html')); pg.wait_for_timeout(800); ok = n = 0
     for label, args, want in [('Phantom Rush > Shadow Sweep', ['5S', '214', False], True), ('Shadow Sweep > Rising Shade', ['2S', '623', False], True),
                               ('Phantom Rush > Night Drop (comes out)', ['5S', '41236', False], None), ('blocked Phantom Rush: no chain', ['5S', '214', True], False)]:
         r = pg.evaluate(JS, args); good = bool(r['chained']) if want is None else bool(r['chained']) == want and (not want or r['maxCombo'] >= 2); ok += good; n += 1

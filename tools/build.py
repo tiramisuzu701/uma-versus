@@ -46,6 +46,19 @@ _pp='if(!e)throw new Error("Automatic publicPath is not supported in this browse
 assert sb.count(_pp)==1; sb=sb.replace(_pp,'if(!e)e="https://invalid.local/";')
 assert '</script' not in sb.lower()
 html=html.replace('/*__SUPABASE__*/',sb)
-html=html.replace('/*__PEERJS__*/',peer).replace('/*__ASSETS__*/','const ASSETS = '+json.dumps(assets)+';').replace('/*__CODE__*/',code)
-open(root+'index.html','w').write(html)
-print(len(html), 'build', build)
+html=html.replace('/*__PEERJS__*/',peer).replace('/*__CODE__*/',code)
+# Two outputs from the same page:
+#  uma-versus.html      one self-contained file (sprites and music inside it): works offline and from file://, used by the tests
+#  uma-versus-web.html  the website's index.html: sprites and music stay separate files under assets/, so the page itself
+#                       is ~3 MB instead of ~78 MB, music streams when it's needed, and browsers cache every file
+single=html.replace('/*__ASSETS__*/','const ASSETS = '+json.dumps(assets)+';')
+open(root+'build/uma-versus.html','w').write(single)
+web_assets={k:{**a,'img':f'assets/sprites/{k}.png','imgR':f'assets/sprites/{k}_r.png'} for k,a in assets.items()}
+web=html.replace('/*__ASSETS__*/','const ASSETS = '+json.dumps(web_assets)+"; const MUSIC_URL = 'assets/music/';")
+web=re.sub(r'<script type="text/plain" class="track" id="mus-[^"]+">[^<]*</script>','',web)
+open(root+'index.html','w').write(web)
+os.makedirs(root+'assets/sprites',exist_ok=True)
+for k,a in assets.items():
+    for key,suf in (('img',''),('imgR','_r')):
+        open(root+f'assets/sprites/{k}{suf}.png','wb').write(base64.b64decode(a[key].split(',',1)[1]))
+print(len(single), 'build', build, '· web page', len(web))

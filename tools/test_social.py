@@ -7,7 +7,7 @@ for _d in ('build/wiki', 'build/shots/ui', 'build/shots/fx'): _os.makedirs(_os.p
 import asyncio, json, base64, time, re
 from urllib.parse import urlparse, parse_qs
 from playwright.async_api import async_playwright
-GAME = 'file://' + ROOT + '/index.html'
+GAME = 'file://' + ROOT + '/build/uma-versus.html'
 U = {'u1': {'id': '00000000-0000-4000-8000-000000000001', 'email': 'a@x', 'name': 'Alpha'},
      'u2': {'id': '00000000-0000-4000-8000-000000000002', 'email': 'b@x', 'name': 'Bravo'}}
 DB = {'friends': [], 'presence': {}, 'invites': [], 'rooms': {}, 'keys': {}, 'lb': [

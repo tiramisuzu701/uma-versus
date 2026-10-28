@@ -39,7 +39,7 @@ JS = r"""() => {
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(viewport={'width': 960, 'height': 540}); pe = []; pg.on('pageerror', lambda e: pe.append(str(e)))
     pg.add_init_script(INIT)
-    pg.goto('file://' + ROOT + '/index.html'); pg.wait_for_timeout(1500)
+    pg.goto('file://' + ROOT + '/build/uma-versus.html'); pg.wait_for_timeout(1500)
     out, errs = pg.evaluate(JS)
     for l in out: print(l)
     # the Controls screen's test readout, with a Pro Controller holding d-pad up-right and B

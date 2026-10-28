@@ -11,7 +11,7 @@ async def main():
         A = await ctx.new_page(); B = await ctx.new_page(); errs = []
         for n, pg in (('A', A), ('B', B)):
             pg.on('pageerror', lambda e, n=n: errs.append(n + ': ' + str(e)))
-            await pg.goto('file://' + ROOT + '/index.html'); await pg.wait_for_timeout(500)
+            await pg.goto('file://' + ROOT + '/build/uma-versus.html'); await pg.wait_for_timeout(500)
             await pg.evaluate("() => { UI.screen='online'; showNetPanel(); document.getElementById('netLocal').checked = true; }")
         await A.click('#netHost'); await A.wait_for_timeout(300)
         vis = await A.evaluate("() => !document.getElementById('netPracticeRow').classList.contains('hidden')")

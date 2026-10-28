@@ -15,7 +15,7 @@ JS = r"""([gap, hold]) => {
 }"""
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
-    pg.goto('file://' + ROOT + '/index.html'); pg.wait_for_timeout(800)
+    pg.goto('file://' + ROOT + '/build/uma-versus.html'); pg.wait_for_timeout(800)
     ok = 0; n = 0
     for hold, name in (('r', 'standing'), ('dr', 'crouching')):
       for gap in (20, 40, 60, 80, 110, 200, 400):

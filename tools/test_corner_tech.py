@@ -28,7 +28,7 @@ JS = r"""(file) => {
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(); pg = await b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
-        await pg.goto('file://' + (sys.argv[1] if len(sys.argv) > 1 else ROOT+'/index.html')); await pg.wait_for_timeout(800)
+        await pg.goto('file://' + (sys.argv[1] if len(sys.argv) > 1 else ROOT+'/build/uma-versus.html')); await pg.wait_for_timeout(800)
         res = await pg.evaluate(JS, ''); n = 0
         for label, teched, info in res:
             ok = teched and info and info['dist'] >= 130 and not info.get('rethrow') and not info.get('walkThrow'); n += ok

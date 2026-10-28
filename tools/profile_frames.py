@@ -37,7 +37,7 @@ async def main():
         b = await p.chromium.launch(args=['--js-flags=--expose-gc'])
         pg = await b.new_page(viewport={'width': 1920, 'height': 1080}, device_scale_factor=1)
         cdp = await pg.context.new_cdp_session(pg)
-        await pg.goto('file://' + ROOT + '/index.html', wait_until='domcontentloaded', timeout=120000); await pg.wait_for_timeout(6000)
+        await pg.goto('file://' + ROOT + '/build/uma-versus.html', wait_until='domcontentloaded', timeout=120000); await pg.wait_for_timeout(6000)
         print('music tracks decoded in the background:', await pg.evaluate('Object.keys(Music.urls).length'), 'of', await pg.evaluate("document.querySelectorAll('script.track').length"))
         await cdp.send('Performance.enable')
         m0 = {m['name']: m['value'] for m in (await cdp.send('Performance.getMetrics'))['metrics']}

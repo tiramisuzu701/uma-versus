@@ -20,7 +20,7 @@ JS = r"""([mot, btn, gap]) => {
   return [mv, blockF >= 0 ? dFree - aFree : null];
 }"""
 with sync_playwright() as p:
-    b = p.chromium.launch(); pg = b.new_page(); pg.goto('file://' + ROOT + '/index.html'); pg.wait_for_timeout(800)
+    b = p.chromium.launch(); pg = b.new_page(); pg.goto('file://' + ROOT + '/build/uma-versus.html'); pg.wait_for_timeout(800)
     ok = n = 0
     for mot, gap in (('236', 200), ('214', 120), ('623', 70)):
         for btn in 'LMH':

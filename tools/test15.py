@@ -43,7 +43,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(); pg = await b.new_page()
         errs=[]; pg.on('pageerror', lambda e: errs.append(str(e)))
-        await pg.goto('file://' + ROOT + '/index.html'); await pg.wait_for_timeout(800)
+        await pg.goto('file://' + ROOT + '/build/uma-versus.html'); await pg.wait_for_timeout(800)
         await pg.evaluate("() => { tick = () => {}; render = () => {}; }")
         await pg.evaluate(LIB + "\n;0")
         print(await pg.evaluate(TESTS)); print('ERR', errs[:5]); await b.close()

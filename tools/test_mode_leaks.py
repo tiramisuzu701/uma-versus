@@ -32,7 +32,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(); pg = await b.new_page(viewport={'width': 960, 'height': 540}); errs = []
         pg.on('pageerror', lambda e: errs.append(str(e)))
-        await pg.goto('file://' + ROOT + '/index.html'); await pg.wait_for_timeout(1500)
+        await pg.goto('file://' + ROOT + '/build/uma-versus.html'); await pg.wait_for_timeout(1500)
         o = await pg.evaluate(JS)
         bad = [k for k in ('versus', 'arcade', 'cpu') if 'Reset positions' in o[k] or 'Watch demo' in o[k]]
         ok = not bad and not o['versusTR'] and not o['arcTR'] and o['arcOn'] and not o['arcAfter'] and not o['tut'] \

@@ -57,7 +57,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(); pg = await b.new_page(); errs = []
         pg.on('pageerror', lambda e: errs.append(str(e)))
-        await pg.goto('file://' + ROOT + '/index.html'); await pg.wait_for_timeout(800)
+        await pg.goto('file://' + ROOT + '/build/uma-versus.html'); await pg.wait_for_timeout(800)
         await pg.evaluate("() => { tick = () => {}; render = () => {}; }")
         for seed in (int(a) for a in sys.argv[1:]) if len(sys.argv) > 1 else (7, 1234, 42, 2026):
             print('seed', seed); print(await pg.evaluate(JS, seed))

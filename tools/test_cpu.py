@@ -41,7 +41,7 @@ async def main():
             pairs.append([a, lvl[0], b, lvl[1], 100 + k + lvl[0] * 10 + lvl[1]])
     async with async_playwright() as p:
         b = await p.chromium.launch(); pg = await b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
-        await pg.goto('file://' + ROOT + '/index.html'); await pg.wait_for_timeout(2000)
+        await pg.goto('file://' + ROOT + '/build/uma-versus.html'); await pg.wait_for_timeout(2000)
         await pg.evaluate("() => { tick = () => {}; render = () => {}; Sfx.play = () => {}; }")
         res = json.loads(await pg.evaluate(JS, pairs))
         print('ERR', errs[:3]); await b.close()

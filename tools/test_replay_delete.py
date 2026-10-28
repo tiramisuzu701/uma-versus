@@ -27,7 +27,7 @@ JS = r"""() => {
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(viewport={'width': 960, 'height': 540})
     pe = []; pg.on('pageerror', lambda e: pe.append(str(e)))
-    pg.goto('file://' + ROOT + '/index.html'); pg.wait_for_timeout(1500)
+    pg.goto('file://' + ROOT + '/build/uma-versus.html'); pg.wait_for_timeout(1500)
     out, errs = pg.evaluate(JS)
     for l in out: print(l)
     # scrolling: 8 replays + extras must keep the selected row on screen

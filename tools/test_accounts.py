@@ -6,7 +6,7 @@ for _d in ('build/wiki', 'build/shots/ui', 'build/shots/fx'): _os.makedirs(_os.p
 import asyncio, json, base64, time, re, sys
 from urllib.parse import urlparse, parse_qs
 from playwright.async_api import async_playwright
-GAME = 'file://' + ROOT + '/index.html'
+GAME = 'file://' + ROOT + '/build/uma-versus.html'
 DB = {'users': {}, 'profiles': {}, 'settings': {}, 'results': []}
 LOG = []
 def jwt(sub):

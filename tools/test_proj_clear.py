@@ -20,7 +20,7 @@ JS = r"""([c1, mv, how]) => {
 CASES = [('kb', '5S', 'hit', True), ('spe', '5S', 'hit', True), ('at', '5S', 'hit', True), ('at', '2S', 'throw', True), ('kb', '5S', 'block', False)]
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
-    pg.goto('file://' + ROOT + '/index.html'); pg.wait_for_timeout(800)
+    pg.goto('file://' + ROOT + '/build/uma-versus.html'); pg.wait_for_timeout(800)
     ok = 0
     for c, mv, how, clears in CASES:
         before, after, st = pg.evaluate(JS, [c, mv, how])

@@ -28,7 +28,7 @@ BAR = r"""(b) => { tick = () => {}; const N = (o = {}) => ({ ...NEUTRAL, ...o })
   return dFree - aFree; }"""
 with sync_playwright() as p:
     b = p.chromium.launch(); pg = b.new_page(); errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
-    pg.goto('file://' + ROOT + '/index.html'); pg.wait_for_timeout(800); ok = n = 0
+    pg.goto('file://' + ROOT + '/build/uma-versus.html'); pg.wait_for_timeout(800); ok = n = 0
     bf, free = pg.evaluate(LOOP); good = free > 0; ok += good; n += 1
     print('OK ' if good else 'BAD', f'mashing 2L in the corner: {bf} frames blocking, {free} free frames for the defender')
     for mv in ['5L', '2L', '5M', '2M', '5H']:
