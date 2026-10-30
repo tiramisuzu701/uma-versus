@@ -157,7 +157,9 @@ async function acctRecord() {
 }
 function acctTick() {
   if (!acctOn()) return;
-  if (G.phase === 'match' && G.mode === 'online' && G.p.length && ACCT.recFor !== G.p[0]) { ACCT.recFor = G.p[0]; acctRecord(); }
+  // 2.0.2: record once the confirmed result has been on screen for 1.5 s with no desync (late checksums get time to arrive);
+  // a desynced match is stopped and never recorded
+  if (G.phase === 'match' && G.mode === 'online' && G.p.length && ACCT.recFor !== G.p[0] && Net.desync < 0 && netMatchConfirmedOver() && G.phaseT > 90) { ACCT.recFor = G.p[0]; acctRecord(); }
   if (ACCT.pullDone && ++ACCT.pushT % 600 === 0) acctPush(false);   // every 10s if something changed
 }
 

@@ -279,6 +279,7 @@ function netPump() {
       case 'in': onInputs(m); break;
       case 'cs': onChecksum(m); break;
       case 'bye': onDisconnected('Opponent left the match.'); break;
+      case 'void': if (m.m === Net.matchId && Net.desync < 0) { Net.desync = m.f | 0; netLog('desync (theirs)', { at: Net.desync, ...netStats() }); } break;   // 2.0.2: their game found the desync
     }
   }
   if (!Net.connected) return;
@@ -319,7 +320,7 @@ function startNetMatch(st) {
   Object.assign(Net, {
     matchId: st.m, delay: st.delay, F: 0, local: [], remote: [], pred: [], snaps: [], rb: null,
     remoteMax: st.delay - 1, ack: st.delay - 1, remoteF: 0, rbFrames: 0, rbMax: 0, stalls: 0,
-    csMine: {}, csTheirs: {}, csNext: 0, desync: -1, menu: false, myReady: false, theirReady: false, phaseAt: [], recDone: false,
+    csMine: {}, csTheirs: {}, csNext: 0, desync: -1, voidT: -1, menu: false, myReady: false, theirReady: false, phaseAt: [], recDone: false,
     matchKey: typeof st.key === 'string' ? st.key.slice(0, 64) : 'm' + st.m + '-' + Date.now(),
   });
   for (let f = 0; f < st.delay; f++) { Net.local[f] = 0; Net.remote[f] = 0; }
@@ -429,7 +430,7 @@ function specFeed() {
     try { c.send({ t: 'sin', m: Net.matchId, s: from, d }); c._sent = to; } catch (e) { }
   }
 }
-const SPEC = { m: 0, frames: [], idx: 0, names: ['P1', 'P2'], live: false, buildOk: true };
+const SPEC = { m: 0, frames: [], idx: 0, names: ['P1', 'P2'], live: false, buildOk: true, voided: false };
 function netWatch(code) {
   netClose(true);
   if (typeof Peer === 'undefined') { setStatus('PeerJS failed to load.'); return; }
@@ -456,12 +457,13 @@ function specPump(now) {
     if (m.t === 'pong') { const r = now - m.ts; Net.ping = Net.ping ? Net.ping * 0.8 + r * 0.2 : r; }
     if (m.t === 'sstart' && m.st) {
       const st = m.st; if (m.names) SPEC.names = m.names.map(n => String(n).slice(0, 16));
-      Object.assign(SPEC, { m: st.m, frames: [], idx: 0, live: true });
+      Object.assign(SPEC, { m: st.m, frames: [], idx: 0, live: true, voided: false });
       leaveSideModes('spectate');
       startMatch('spectate', st.c[0], st.c[1], Array.isArray(st.pal) ? st.pal : null);
       G.stage = st.stage || 0; G.music = st.music || st.c[0];
     }
     if (m.t === 'sin' && m.m === SPEC.m) for (let k = 0; k < m.d.length; k++) SPEC.frames[m.s + k] = m.d[k];
+    if (m.t === 'svoid' && m.m === SPEC.m) { SPEC.live = false; SPEC.voided = true; }   // 2.0.2: the players' games went out of sync: the match was stopped
   }
   if (Net.connected && ++Net.pingT % 60 === 0) netSend({ t: 'ping', ts: now });
   if (Net.connected && now - Net.lastRecv > 9000) onDisconnected('Lost the connection to the room.');
@@ -523,6 +525,20 @@ function onChecksum(m) {
   if (m.m !== Net.matchId) return;
   Net.csTheirs[m.f] = m.h;
   if (Net.csMine[m.f] !== undefined && m.f <= Net.remoteMax && Net.csMine[m.f] !== m.h) Net.desync = m.f;
+}
+// 2.0.2: a desync stops the match for both players. The two games no longer agree on what happened (a bug, or a modified
+// copy), so neither result can be trusted: tell the other side (and the spectators), record nothing, and go back to
+// the lobby after a few seconds.
+function netVoidTick() {
+  const N = Net;
+  if (N.voidT < 0) {
+    N.voidT = 0; N.menu = false;
+    for (let i = 0; i < 3; i++) netSend({ t: 'void', m: N.matchId, f: N.desync });   // the match channel doesn't resend
+    if (N.role === 'host') specSend({ t: 'svoid', m: N.matchId });
+    netLog('match stopped (desync)', { at: N.desync, ...netStats() }); Sfx.play('deny');
+  }
+  sendInputs();   // keep their game fed so it reaches the same frame and sees the desync too
+  return ++N.voidT >= 240;   // 4 s on screen, then back to the lobby
 }
 // over once the newest frame simulated with fully-known inputs is already in the 'match' phase
 function netMatchConfirmedOver() { return Net.phaseAt[Math.min(Net.remoteMax, Net.F - 1)] === 'match'; }

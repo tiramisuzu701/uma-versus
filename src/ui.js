@@ -1,4 +1,4 @@
-const VERSION = '2.0.1';
+const VERSION = '2.0.2';
 // Menus and HUD. The look is race day: gate colours, tote-board LED text,
 // saddlecloth name plates, rosettes for round wins.
 'use strict';
@@ -1076,7 +1076,14 @@ function drawNetHUD() {
   label(`· delay ${Net.delay} · rollback ${Net.rbFrames}f (avg ${avg}, max ${Net.rbMax})${Net.specs.length ? ' · ' + Net.specs.length + ' watching' : ''}`, W / 2 - 2, 84, 12, '#cfe3ff', 'left', 700);
   for (const sd of [0, 1]) { const n = netName(sd); if (n) label(n, sd === 0 ? 112 : W - 112, 84, 14, '#fff', sd === 0 ? 'left' : 'right', 900, true); }
   if (Net.waiting && Net.stalls > 20) txt('waiting for opponent…', W / 2, 104, 18, PAL.gold);
-  if (Net.desync >= 0) txt(`DESYNC at frame ${Net.desync}: please report what happened`, W / 2, 124, 15, '#ff6b6b');
+  if (Net.desync >= 0) {   // 2.0.2: the match is stopped
+    ctx.fillStyle = 'rgba(14,6,28,.72)'; ctx.fillRect(0, 0, W, HGT);
+    panel(W / 2 - 280, HGT / 2 - 80, 560, 160, '#ff6b6b');
+    txt('MATCH STOPPED', W / 2, HGT / 2 - 36, 38, '#fff');
+    label('Your games went out of sync, so this match can\'t count.', W / 2, HGT / 2 + 4, 17, '#ffd6dc', 'center', 700);
+    label(`No result was recorded · desync at frame ${Net.desync} · back to the lobby in a moment`, W / 2, HGT / 2 + 32, 13, '#d9cdef', 'center', 600);
+    return;
+  }
   if (Net.menu) {
     panel(W / 2 - 230, HGT / 2 - 60, 460, 120, PAL.rose);
     txt('Leave the match?', W / 2, HGT / 2 - 20, 32, '#fff');
@@ -1094,7 +1101,7 @@ function drawSpecHUD() {
     panel(W / 2 - 260, 190, 520, 140, PAL.gold);
     txt('WATCHING ROOM ' + Net.code, W / 2, 226, 30, '#fff');
     label(`${SPEC.names[0]} vs ${SPEC.names[1]}`, W / 2, 262, 18, PAL.gold, 'center', 800, true);
-    label(SPEC.buildOk ? 'The match shows up here as soon as it starts.' : 'This room is on a different version, so the match can\'t be shown.', W / 2, 292, 15, '#d9cdef', 'center', 600);
+    label(SPEC.voided ? 'The players\' games went out of sync, so that match was stopped.' : SPEC.buildOk ? 'The match shows up here as soon as it starts.' : 'This room is on a different version, so the match can\'t be shown.', W / 2, 292, 15, '#d9cdef', 'center', 600);
   }
   hintBar('Esc  stop watching');
 }

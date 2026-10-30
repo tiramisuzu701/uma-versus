@@ -6,7 +6,7 @@
 
 A fan-made 2D fighting game with the Umamusume cast. It runs in the browser, no install needed.
 
-**Update 2.0.1 · build `9e9133`**
+**Update 2.0.2 · build `48dacc`**
 
 - 12 characters, each with her own play style, and palettes for every one
 - Arcade mode with rivals, a final boss and endings, plus a tutorial

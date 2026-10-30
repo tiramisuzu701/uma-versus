@@ -410,6 +410,10 @@ function tick() {
       if (conf(0) || conf(1) || enter) { netBye(); netClose(false); UI.screen = 'online'; showNetPanel(); setStatus('You left the match.'); return; }
       if (esc || back(0) || back(1)) Net.menu = false;
     } else if (esc) Net.menu = true;
+    if (Net.desync >= 0) {   // 2.0.2: out of sync: the match is stopped and nobody's result counts
+      if (netVoidTick() || (Net.voidT > 60 && (anyConf || esc))) { Net.voidT = -1; Net.desync = -1; UI.screen = 'netselect'; Net.menu = false; Net.myReady = false; Sfx.play('ok'); }
+      return;
+    }
     if (netMatchConfirmedOver()) {   // results screen; keep resending inputs so the other side can finish too
       if (!Net.recDone) { Net.recDone = true; recFinishOnline(); }
       if (edges.includes('KeyD')) downloadReplay(lastReplay);
